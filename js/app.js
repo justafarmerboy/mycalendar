@@ -211,40 +211,19 @@ function renderMoon(sky, shade = { umbra: 0, penumbra: 0 }) {
 }
 
 /**
- * Small Moon seen from outside: the half facing the Sun is always lit (toSun), so on its own it
- * never changes. The blue outline marks the half facing the Earth (toEarth); the part that is
- * both lit and inside the blue outline is what we see from Earth, and that is what changes.
- * Vectors are x right, y up, z toward the viewer.
+ * Small Moon on its orbit, drawn as the Earth sees it at elongation e (waxing lit on the right),
+ * like the phase ring of the sketch. In the Earth's shadow it turns dim and coppery red.
  */
-function drawMiniMoon(c, x, y, r, toSun, toEarth, shade = { umbra: 0, penumbra: 0 }) {
-  const dpr = L.dpr, n = Math.max(8, Math.round(2 * r * dpr)), half = n / 2;
-  const cv = drawMiniMoon.cv ??= document.createElement('canvas');
-  cv.width = cv.height = n;
-  const c2 = cv.getContext('2d'), img = c2.createImageData(n, n), d = img.data;
-  const line = 1.6 / half;
-  for (let py = 0; py < n; py++) {
-    const v = 1 - (py + 0.5) / half;
-    for (let px = 0; px < n; px++) {
-      const u = (px + 0.5) / half - 1, r2 = u * u + v * v;
-      if (r2 > 1) continue;
-      const w = Math.sqrt(1 - r2);
-      const lit = u * toSun[0] + v * toSun[1] + w * toSun[2];
-      const face = u * toEarth[0] + v * toEarth[1] + w * toEarth[2];
-      const k = Math.min(1, Math.max(0, (lit + 0.04) / 0.08));
-      let cr = 43 + (232 - 43) * k, cg = 47 + (230 - 47) * k, cb = 56 + (220 - 56) * k;
-      if (face > 0 && k < 0.5) { cr += 10; cg += 30; cb += 60; } // dark side facing Earth: faint blue
-      if (shade.penumbra > 0) { // in the Earth's shadow: dimmer, and coppery red in the umbra
-        const dim = 1 - 0.3 * shade.penumbra, u = shade.umbra;
-        cr = cr * dim * (1 - 0.35 * u); cg = cg * dim * (1 - 0.75 * u); cb = cb * dim * (1 - 0.85 * u);
-      }
-      if (Math.abs(face) < line * 1.8) [cr, cg, cb] = [90, 170, 255]; // edge of the Earth-facing half
-      const i = (py * n + px) * 4;
-      d[i] = cr; d[i + 1] = cg; d[i + 2] = cb;
-      d[i + 3] = 255 * Math.min(1, (1 - Math.sqrt(r2)) * half);
-    }
-  }
-  c2.putImageData(img, 0, 0);
-  c.drawImage(cv, x - r, y - r, 2 * r, 2 * r);
+function drawSeenMoon(c, e, x, y, r, shade = { umbra: 0, penumbra: 0 }) {
+  const dim = 1 - 0.3 * shade.penumbra, u = shade.umbra;
+  const lit = `rgb(${242 * dim * (1 - 0.35 * u)},${239 * dim * (1 - 0.75 * u)},${228 * dim * (1 - 0.85 * u)})`;
+  c.save();
+  c.translate(x, y);
+  c.fillStyle = '#1b2235'; c.strokeStyle = 'rgba(207,214,228,.6)'; c.lineWidth = 1;
+  c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2); c.fill(); c.stroke();
+  c.fillStyle = lit;
+  c.fill(new Path2D(litPath(norm(e) < 0.5 ? 0.5 : norm(e), r)));
+  c.restore();
 }
 
 function label(text, x, y, color = '#e6ebf5', size = 14, align = 'center') {
@@ -344,11 +323,8 @@ function drawScene(jd, phase) {
       ctx.beginPath(); ctx.moveTo(ax + 7, ay - 0.6); ctx.lineTo(ax - 3, ay - 5); ctx.lineTo(ax - 3, ay + 4); ctx.closePath(); ctx.fill();
     }
   };
-  // the orbit is drawn as seen from a little above its plane (tilt t), so the Earth-facing half
-  // is tilted the same way; the Sun is in the orbit plane, so the lit half always faces left
-  const tilt = Math.asin(L.orbitRy / L.orbit);
   const smallMoon = () => {
-    drawMiniMoon(ctx, mx, my, mr, [-1, 0, 0], [Math.cos(D), Math.sin(D) * Math.sin(tilt), -Math.sin(D) * Math.cos(tilt)], cover);
+    drawSeenMoon(ctx, phase.elong, mx, my, mr, cover);
     label('ดวงจันทร์', mx, my + mr + 15, '#cfd6e4', 12);
   };
   orbitHalf(false);
@@ -573,7 +549,7 @@ function drawBird(jd, phase) {
   bctx.lineTo(x + sl * Math.cos(away) + rb * 0.45 * Math.sin(away), y - sl * Math.sin(away) + rb * 0.45 * Math.cos(away));
   bctx.lineTo(x + rb * Math.sin(away), y + rb * Math.cos(away));
   bctx.closePath(); bctx.fill();
-  drawMiniMoon(bctx, mx, my, mr, [Math.cos(sa), Math.sin(sa), 0], [-Math.cos(ma), -Math.sin(ma), 0], E.shadowCover(jd));
+  drawSeenMoon(bctx, phase.elong, mx, my, mr, E.shadowCover(jd));
   renderGlobe(f, birdGlobe);
   const atm = bctx.createRadialGradient(x, y, rb * 0.98, x, y, rb * 1.12);
   atm.addColorStop(0, 'rgba(120,180,255,.45)'); atm.addColorStop(1, 'rgba(120,180,255,0)');
