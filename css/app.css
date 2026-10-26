@@ -34,9 +34,10 @@ main { max-width: 1200px; margin: 0 auto; padding: 0 16px 24px; }
 .bird-stage { margin-top: 20px; }
 .stage-title { position: absolute; top: 8px; right: 12px; margin: 0; font-size: .95rem; color: var(--muted); font-weight: 600; pointer-events: none; }
 #bird { display: block; width: 100%; }
-.bird-row { margin: 10px 0 16px; flex-wrap: nowrap; align-items: flex-start; }
+.stage-btn { position: absolute; top: 10px; left: 10px; background: rgba(15, 22, 40, .85); }
+.bird-row { margin: 10px 0 16px; }
 .bird-row p { margin: 0; font-size: .92rem; }
-@media (max-width: 640px) { .bird-row { flex-wrap: wrap; } .stage-title { display: none; } }
+@media (max-width: 640px) { .stage-title, .stage-btn { display: none; } }
 
 .controls { display: grid; gap: 8px; margin: 12px 0; }
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

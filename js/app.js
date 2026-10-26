@@ -685,15 +685,15 @@ function setup() {
     if (on && !state.playing) { const d = new Date(state.t); state.holdMin = d.getHours() * 60 + d.getMinutes(); }
     state.playing = on;
     $('playBtn').textContent = on ? '❚❚ หยุด' : '▶ เล่น';
-    $('yearBtn').textContent = on ? '❚❚ หยุด' : '▶ ดูโลกโคจรครบ 1 ปี';
+    document.querySelectorAll('.year-btn').forEach((b) => { b.textContent = on ? '❚❚ หยุด' : '▶ ดูโลกโคจรครบ 1 ปี'; });
     last = 0;
     if (on) requestAnimationFrame(tick); else schedule();
   };
   $('playBtn').addEventListener('click', () => play(!state.playing));
-  $('yearBtn').addEventListener('click', () => {
+  document.querySelectorAll('.year-btn').forEach((b) => b.addEventListener('click', () => {
     if (!state.playing) { state.speed = 2592000000; $('speedSel').value = String(state.speed); }
     play(!state.playing);
-  });
+  }));
   $('nextEventBtn').addEventListener('click', () => {
     const jd = A.jdOf(new Date(state.t));
     const next = eventsAround(jd).find((e) => e.jd > jd + 1 / 1440);
