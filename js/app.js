@@ -57,16 +57,20 @@ let stars = [];
 function layout() {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const W = canvas.clientWidth;
-  const H = Math.round(Math.max(W * 0.5, 280));
+  const H = Math.round(Math.max(W * 0.6, 300));
   canvas.width = Math.round(W * dpr);
   canvas.height = Math.round(H * dpr);
   canvas.style.height = H + 'px';
-  const R = Math.min(H * 0.28, W * 0.15);
+  const R = Math.min(H * 0.27, W * 0.15);
   L = {
     W, H, dpr, R,
-    ex: W * 0.5, ey: H * 0.52,
-    orbit: R * 1.65, orbitRy: R * 1.15, // seen from above the orbit, so the Moon passes below/above the Earth
+    ex: W * 0.5, ey: H * 0.5,
+    orbit: R * 1.65, orbitRy: R * 0.8, // seen from above the orbit, so the Moon passes below/above the Earth
     sunX: -H * 0.18, sunR: H * 0.42,
+    mr: Math.max(6, R * 0.1),
+    // px per degree of the Moon's latitude: exaggerated, but small enough that the tilted orbit
+    // (up to 5.3 degrees) stays inside the frame, clear of the date at the top
+    K: Math.min(R * 0.18, (H * 0.5 - 34 - R * 0.8 - Math.max(6, R * 0.1)) / 5.3),
     moonX: W - Math.min(H * 0.17, W * 0.085) - W * 0.04, moonY: H * 0.45, moonR: Math.min(H * 0.17, W * 0.085),
   };
   globe.width = globe.height = Math.round(2 * R * dpr);
@@ -274,8 +278,7 @@ function drawScene(jd, phase) {
   // The Moon's orbit is tilted about 5 degrees, so it passes above or below the Earth's shadow at
   // most full moons. Its latitude is drawn exaggerated (K px per degree), and the shadow is sized
   // with the same scale, so the Moon touches it on screen exactly when there is a real eclipse.
-  const D = phase.elong * RAD, K = R * 0.25, beta = A.moonLat(jd);
-  const mr = Math.max(6, R * 0.12);
+  const D = phase.elong * RAD, { K, mr } = L, beta = A.moonLat(jd);
   const mx = ex - L.orbit * Math.cos(D), my = ey + L.orbitRy * Math.sin(D) - beta * K;
   const cover = E.shadowCover(jd);
   const path = [];
@@ -299,7 +302,12 @@ function drawScene(jd, phase) {
   };
   const shadowCone = () => { // not to scale; its width where the Moon passes follows the eclipse limits
     const x1 = ex + L.orbit, x2 = x1 + R * 0.3;
-    // shadow is invisible against black space, so it is drawn as a faint tinted outline
+    // shadow is invisible against black space, so it is drawn as a faint tinted outline,
+    // kept off the (see-through) Earth itself
+    ctx.save();
+    const hole = new Path2D();
+    hole.rect(0, 0, L.W, L.H); hole.arc(ex, ey, R, 0, Math.PI * 2);
+    ctx.clip(hole, 'evenodd');
     for (const [lim, fill, line] of [[1.52, 'rgba(150,160,190,.10)', 'rgba(170,180,210,.35)'], [0.98, 'rgba(170,60,40,.22)', 'rgba(230,110,80,.6)']]) {
       const h1 = lim * K - mr, h2 = h1 + ((h1 - R) / L.orbit) * (x2 - x1);
       ctx.fillStyle = fill; ctx.strokeStyle = line; ctx.lineWidth = 1; ctx.setLineDash([5, 4]);
@@ -307,6 +315,7 @@ function drawScene(jd, phase) {
       ctx.lineTo(x2, ey + h2); ctx.lineTo(x1, ey + h1); ctx.lineTo(ex, ey + R); ctx.closePath(); ctx.fill(); ctx.stroke();
       ctx.setLineDash([]);
     }
+    ctx.restore();
     label('เงาโลก', x2 - 4, ey - (0.98 * K - mr) - 8, 'rgba(230,140,110,.9)', 11, 'right');
   };
   const orbitHalf = (front) => {
@@ -323,9 +332,10 @@ function drawScene(jd, phase) {
       ctx.beginPath(); ctx.moveTo(ax + 7, ay - 0.6); ctx.lineTo(ax - 3, ay - 5); ctx.lineTo(ax - 3, ay + 4); ctx.closePath(); ctx.fill();
     }
   };
-  const smallMoon = () => {
+  const behind = Math.sin(D) < 0 && Math.hypot(mx - ex, my - ey) < R + mr;
+  const smallMoon = (withLabel = true) => {
     drawSeenMoon(ctx, phase.elong, mx, my, mr, cover);
-    label('ดวงจันทร์', mx, my + mr + 15, '#cfd6e4', 12);
+    if (withLabel && !behind) label('ดวงจันทร์', mx, my + mr + 15, '#cfd6e4', 12);
   };
   orbitHalf(false);
   drawPath(false);
@@ -335,7 +345,17 @@ function drawScene(jd, phase) {
 
   // Earth
   renderGlobe(f);
+  ctx.globalAlpha = 0.85; // slightly see-through, so whatever is behind the Earth still shows
   ctx.drawImage(globe, ex - R, ey - R, 2 * R, 2 * R);
+  ctx.globalAlpha = 1;
+  // ghost of what is behind the Earth: the far side of the Moon's path, and the Moon itself
+  ctx.save();
+  ctx.beginPath(); ctx.arc(ex, ey, R, 0, Math.PI * 2); ctx.clip();
+  ctx.globalAlpha = 0.3;
+  drawPath(false);
+  if (Math.sin(D) < 0) smallMoon(false);
+  ctx.restore();
+  if (behind) label('ดวงจันทร์ (หลังโลก)', mx, my + mr + 15, '#cfd6e4', 12);
   const atm = ctx.createRadialGradient(ex, ey, R * 0.98, ex, ey, R * 1.08);
   atm.addColorStop(0, 'rgba(120,180,255,.45)');
   atm.addColorStop(1, 'rgba(120,180,255,0)');
