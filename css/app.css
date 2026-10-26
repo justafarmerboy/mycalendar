@@ -31,6 +31,13 @@ main { max-width: 1200px; margin: 0 auto; padding: 0 16px 24px; }
 .stage-date { position: absolute; top: 10px; left: 0; right: 0; text-align: center; font-weight: 600; font-size: 1.05rem; text-shadow: 0 1px 4px #000; pointer-events: none; }
 .stage-event { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); background: rgba(245, 185, 66, .15); border: 1px solid var(--accent); color: var(--accent); padding: 2px 12px; border-radius: 99px; font-weight: 600; white-space: nowrap; }
 
+.bird-stage { margin-top: 20px; }
+.stage-title { position: absolute; top: 8px; right: 12px; margin: 0; font-size: .95rem; color: var(--muted); font-weight: 600; pointer-events: none; }
+#bird { display: block; width: 100%; }
+.bird-row { margin: 10px 0 16px; flex-wrap: nowrap; align-items: flex-start; }
+.bird-row p { margin: 0; font-size: .92rem; }
+@media (max-width: 640px) { .bird-row { flex-wrap: wrap; } .stage-title { display: none; } }
+
 .controls { display: grid; gap: 8px; margin: 12px 0; }
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 

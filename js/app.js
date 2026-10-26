@@ -19,7 +19,7 @@ const PLACES = [
   { name: 'เรคยาวิก', lat: 64.15, lng: -21.94 },
 ];
 
-const state = { t: Date.now(), place: PLACES[0], playing: false, speed: 86400000 };
+const state = { t: Date.now(), place: PLACES[0], playing: false, speed: 86400000, holdMin: 0 };
 
 // ---------- land mask ----------
 const land = Uint8Array.from(atob(LAND_B64), (c) => c.charCodeAt(0));
@@ -48,7 +48,6 @@ const localDayNumber = (ms) => { const d = new Date(ms); return Math.round(Date.
 const canvas = $('scene');
 const ctx = canvas.getContext('2d');
 const globe = document.createElement('canvas');
-const gctx = globe.getContext('2d');
 const moonBig = document.createElement('canvas');
 const mctx = moonBig.getContext('2d');
 let L = {}; // layout
@@ -89,19 +88,33 @@ const unit = (a) => scale(a, 1 / Math.hypot(...a));
  */
 function earthFrame(jd) {
   const s = A.sun(jd);
-  const ss = A.subsolarPoint(jd);
   const e = s.eps * RAD, l = s.lon * RAD;
-  const axis = [-Math.sin(e) * Math.sin(l), Math.cos(e), Math.sin(e) * Math.cos(l)];
-  const toSun = [-1, 0, 0];
-  const u = unit(sub(toSun, scale(axis, dot(toSun, axis)))); // equator direction under the Sun
-  const w = cross(axis, u); // 90 degrees east of it
-  return { axis, u, w, subLng: ss.lng, sun: s };
+  return frameOf(jd, s, [-Math.sin(e) * Math.sin(l), Math.cos(e), Math.sin(e) * Math.cos(l)], [-1, 0, 0]);
 }
 
-function renderGlobe(f) {
-  const n = globe.width, img = gctx.createImageData(n, n), d = img.data;
+/**
+ * Bird's-eye view from above the orbit (x right, y up, z toward the viewer = ecliptic north).
+ * The Sun is at the centre and the Earth goes round counterclockwise. The axis never moves: it
+ * always leans toward screen-up, the direction of the June-solstice Sun, and points at Polaris.
+ */
+function birdFrame(jd) {
+  const s = A.sun(jd);
+  const e = s.eps * RAD, h = (s.lon + 180) * RAD; // heliocentric longitude of the Earth
+  const f = frameOf(jd, s, [0, Math.sin(e), Math.cos(e)], [-Math.cos(h), -Math.sin(h), 0]);
+  f.pos = [Math.cos(h), Math.sin(h)];
+  return f;
+}
+
+function frameOf(jd, s, axis, toSun) {
+  const u = unit(sub(toSun, scale(axis, dot(toSun, axis)))); // equator direction under the Sun
+  const w = cross(axis, u); // 90 degrees east of it
+  return { axis, u, w, toSun, subLng: A.subsolarPoint(jd).lng, sun: s };
+}
+
+function renderGlobe(f, cv = globe) {
+  const n = cv.width, c2 = cv.getContext('2d'), img = c2.createImageData(n, n), d = img.data;
   const half = n / 2, lw = 0.7 * 57.3 / half; // a grid line about one pixel wide, in degrees
-  const { axis, u, w, subLng } = f;
+  const { axis, u, w, subLng, toSun } = f;
   for (let py = 0; py < n; py++) {
     const y = 1 - (py + 0.5) / half;
     for (let px = 0; px < n; px++) {
@@ -129,8 +142,8 @@ function renderGlobe(f) {
       g(66.56, 150, 210, 255, 0.7);
       const mer = ((lng % 30) + 30) % 30;
       if (mer < lw / Math.max(Math.cos(lat * RAD), 0.2) && al < 80) { cr += (255 - cr) * 0.18; cg += (255 - cg) * 0.18; cb += (255 - cb) * 0.18; }
-      // sunlight comes from the left (-x): smooth terminator with twilight
-      const light = -x;
+      // smooth terminator with twilight
+      const light = x * toSun[0] + y * toSun[1] + z * toSun[2];
       const day = Math.min(1, Math.max(0, (light + 0.06) / 0.14));
       const shade = 0.45 + 0.55 * Math.max(light, 0) ** 0.6;
       const k = day * shade + (1 - day) * 0.11;
@@ -142,7 +155,7 @@ function renderGlobe(f) {
       d[i + 3] = 255 * edge;
     }
   }
-  gctx.putImageData(img, 0, 0);
+  c2.putImageData(img, 0, 0);
 }
 
 // Maria (dark seas) of the near side, as [x, y, radius] on the unit disk, north up.
@@ -321,6 +334,141 @@ function drawPlace(f) {
   label(p.name, x + 8, y - 6, '#fff', 12, 'left');
 }
 
+// ---------- bird's-eye view: Sun in the middle, Earth's orbit, fixed axis toward Polaris ----------
+const bird = $('bird');
+const bctx = bird.getContext('2d');
+const birdGlobe = document.createElement('canvas');
+let B = {};
+let ghostCache = { key: '', items: [] };
+let birdStars = [];
+
+function layoutBird() {
+  const dpr = L.dpr, W = bird.clientWidth;
+  const H = Math.round(Math.min(Math.max(W * 0.72, 440), 760));
+  bird.width = Math.round(W * dpr);
+  bird.height = Math.round(H * dpr);
+  bird.style.height = H + 'px';
+  const ro = Math.min(W * 0.36, H * 0.33);
+  B = { W, H, dpr, cx: W / 2, cy: H * 0.55, ro, rb: Math.max(24, ro * 0.2), rg: Math.max(16, ro * 0.12) };
+  birdGlobe.width = birdGlobe.height = Math.round(2 * B.rb * dpr);
+  ghostCache.key = '';
+  let seed = 11;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  birdStars = Array.from({ length: Math.round(W * H / 2500) }, () => [rnd() * W, rnd() * H, rnd() * 1.2 + 0.2, rnd() * 0.7 + 0.2]);
+}
+
+function arrow(c, x0, y0, x1, y1, color, width = 2, dash = []) {
+  c.strokeStyle = color; c.fillStyle = color; c.lineWidth = width; c.setLineDash(dash);
+  c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke(); c.setLineDash([]);
+  const a = Math.atan2(y1 - y0, x1 - x0);
+  c.beginPath(); c.moveTo(x1, y1);
+  c.lineTo(x1 - 9 * Math.cos(a - 0.4), y1 - 9 * Math.sin(a - 0.4));
+  c.lineTo(x1 - 9 * Math.cos(a + 0.4), y1 - 9 * Math.sin(a + 0.4));
+  c.closePath(); c.fill();
+}
+
+function blabel(text, x, y, color = '#e6ebf5', size = 13, align = 'center') {
+  bctx.font = `600 ${size}px Sarabun, system-ui, sans-serif`;
+  bctx.textAlign = align; bctx.fillStyle = color; bctx.shadowColor = '#000'; bctx.shadowBlur = 4;
+  bctx.fillText(text, x, y); bctx.shadowBlur = 0;
+}
+
+// Earth with its axis arrow, at screen position (x, y) and radius r, from a pre-rendered globe canvas
+function drawBirdEarth(cv, f, x, y, r, strong) {
+  bctx.drawImage(cv, x - r, y - r, 2 * r, 2 * r);
+  const px = x + f.axis[0] * r, py = y - f.axis[1] * r; // north pole on the disk
+  const len = r * (strong ? 2.1 : 1.9);
+  arrow(bctx, px, py, x, y - len, strong ? '#ff6b6b' : 'rgba(255,120,120,.75)', strong ? 2.5 : 1.5, [4, 3]);
+  bctx.fillStyle = '#ff6b6b';
+  bctx.beginPath(); bctx.arc(px, py, strong ? 3.5 : 2.5, 0, Math.PI * 2); bctx.fill();
+  if (strong) blabel('N', px + 10, py + 4, '#ff8f8f', 13, 'left');
+}
+
+function ghosts(year) {
+  const key = `${year}:${B.W}`;
+  if (ghostCache.key === key) return ghostCache.items;
+  ghostCache = {
+    key,
+    items: A.seasonsOf(year).map((e) => {
+      const f = birdFrame(e.jd), cv = document.createElement('canvas');
+      cv.width = cv.height = Math.round(2 * B.rg * B.dpr);
+      renderGlobe(f, cv);
+      return { ...e, f, cv };
+    }),
+  };
+  return ghostCache.items;
+}
+
+function drawBird(jd, phase) {
+  const { W, H, dpr, cx, cy, ro, rb, rg } = B;
+  bctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  bctx.fillStyle = '#02040a';
+  bctx.fillRect(0, 0, W, H);
+  for (const [x, y, r, a] of birdStars) { bctx.globalAlpha = a; bctx.fillStyle = '#fff'; bctx.fillRect(x, y, r, r); }
+  bctx.globalAlpha = 1;
+
+  // Polaris, very far away "up there": every arrow points the same way
+  const sx = cx, sy = 30;
+  const g = bctx.createRadialGradient(sx, sy, 0, sx, sy, 16);
+  g.addColorStop(0, 'rgba(200,225,255,1)'); g.addColorStop(1, 'rgba(200,225,255,0)');
+  bctx.fillStyle = g; bctx.beginPath(); bctx.arc(sx, sy, 16, 0, Math.PI * 2); bctx.fill();
+  bctx.fillStyle = '#fff';
+  bctx.beginPath();
+  for (let i = 0; i < 8; i++) { const a = (i * Math.PI) / 4, rr = i % 2 ? 2.5 : 8; bctx.lineTo(sx + rr * Math.cos(a), sy + rr * Math.sin(a)); }
+  bctx.closePath(); bctx.fill();
+  blabel('ดาวเหนือ (Polaris)', sx + 16, sy + 5, '#cfe1ff', 14, 'left');
+  if (W >= 560) blabel('อยู่ไกล ~430 ปีแสง แกนโลกจึงชี้มาทางนี้ตลอดปี', sx + 16, sy + 22, '#8f9bb5', 12, 'left');
+
+  // orbit and direction of travel
+  bctx.strokeStyle = 'rgba(200,210,230,.35)'; bctx.lineWidth = 1.5; bctx.setLineDash([5, 6]);
+  bctx.beginPath(); bctx.arc(cx, cy, ro, 0, Math.PI * 2); bctx.stroke(); bctx.setLineDash([]);
+  for (const a of [Math.PI * 0.25, Math.PI * 1.25]) {
+    const x = cx + ro * Math.cos(a), y = cy - ro * Math.sin(a);
+    arrow(bctx, x, y, x - 14 * Math.sin(a), y - 14 * Math.cos(a), 'rgba(200,210,230,.55)', 1.5); // counterclockwise tangent
+  }
+
+  // Sun
+  const sg = bctx.createRadialGradient(cx, cy, 0, cx, cy, ro * 0.32);
+  sg.addColorStop(0, 'rgba(255,210,90,.6)'); sg.addColorStop(1, 'rgba(255,170,40,0)');
+  bctx.fillStyle = sg; bctx.beginPath(); bctx.arc(cx, cy, ro * 0.32, 0, Math.PI * 2); bctx.fill();
+  bctx.fillStyle = '#ffd34d'; bctx.beginPath(); bctx.arc(cx, cy, ro * 0.12, 0, Math.PI * 2); bctx.fill();
+  blabel('ดวงอาทิตย์', cx, cy + ro * 0.12 + 16, '#ffd98a', 12);
+
+  // the four seasons of this year, faint; labels go round the current Earth when it is close
+  const f = birdFrame(jd);
+  const x = cx + ro * f.pos[0], y = cy - ro * f.pos[1];
+  const seasonLabels = [];
+  for (const e of ghosts(A.dateOf(jd).getFullYear())) {
+    const gx = cx + ro * e.f.pos[0], gy = cy - ro * e.f.pos[1];
+    if (Math.hypot(gx - x, gy - y) < rb * 2.5) { // beside the Moon's orbit
+      seasonLabels.push([e, x + rb * 1.75 + 8, y - 4, 'left']);
+      continue;
+    }
+    bctx.globalAlpha = 0.55; drawBirdEarth(e.cv, e.f, gx, gy, rg, false); bctx.globalAlpha = 1;
+    seasonLabels.push([e, gx, gy + (e.f.pos[1] > 0.5 ? -(rg * 2.2 + 12) : rg + 18), 'center']);
+  }
+
+  // the Earth now, with the Moon on its small orbit
+  const mo = rb * 1.75, sa = Math.atan2(f.toSun[1], f.toSun[0]), ma = sa + phase.elong * RAD;
+  bctx.strokeStyle = 'rgba(200,210,230,.25)'; bctx.lineWidth = 1;
+  bctx.beginPath(); bctx.arc(x, y, mo, 0, Math.PI * 2); bctx.stroke();
+  const mx = x + mo * Math.cos(ma), my = y - mo * Math.sin(ma), mr = Math.max(4, rb * 0.22);
+  bctx.fillStyle = '#2b2f38'; bctx.beginPath(); bctx.arc(mx, my, mr, 0, Math.PI * 2); bctx.fill();
+  bctx.fillStyle = '#e8e6dc'; bctx.beginPath(); bctx.arc(mx, my, mr, -sa - Math.PI / 2, -sa + Math.PI / 2); bctx.fill();
+  renderGlobe(f, birdGlobe);
+  const atm = bctx.createRadialGradient(x, y, rb * 0.98, x, y, rb * 1.12);
+  atm.addColorStop(0, 'rgba(120,180,255,.45)'); atm.addColorStop(1, 'rgba(120,180,255,0)');
+  bctx.fillStyle = atm; bctx.beginPath(); bctx.arc(x, y, rb * 1.12, 0, Math.PI * 2); bctx.fill();
+  drawBirdEarth(birdGlobe, f, x, y, rb, true);
+
+  for (const [e, lx, ly, align] of seasonLabels) {
+    const d = A.dateOf(e.jd);
+    blabel(e.name, lx, ly, '#f5b942', 13, align);
+    blabel(`${d.getDate()} ${MONTHS[d.getMonth()]}`, lx, ly + 15, '#8f9bb5', 12, align);
+  }
+  if (W >= 560) blabel('มองลงมาจากเหนือระนาบวงโคจร · โลกโคจรทวนเข็มนาฬิกา', 12, H - 12, '#8f9bb5', 12, 'left');
+}
+
 // ---------- cards ----------
 function moonPhaseName(e) {
   if (e < 7 || e >= 353) return { name: 'จันทร์ดับ (เดือนมืด)', en: 'New moon' };
@@ -475,14 +623,17 @@ function renderCards(jd, phase) {
 let raf = 0;
 function render() {
   raf = 0;
-  const jd = A.jdOf(new Date(state.t));
-  const phase = A.moonPhase(jd);
   const d = new Date(state.t);
+  // fast-forwarding: hold the time of day, otherwise the spinning globe just flickers
+  if (state.playing && state.speed > DAY) d.setHours(0, state.holdMin, 0, 0);
+  const jd = A.jdOf(d);
+  const phase = A.moonPhase(jd);
   $('stageDate').textContent = `${fmtDate.format(d)} · ${fmtTime.format(d)} น.`;
   $('dateInput').value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   $('timeInput').value = d.getHours() * 60 + d.getMinutes();
   $('timeOut').textContent = fmtTime.format(d);
   drawScene(jd, phase);
+  drawBird(jd, phase);
   renderCards(jd, phase);
 }
 const schedule = () => { if (!raf) raf = requestAnimationFrame(render); };
@@ -530,19 +681,27 @@ function setup() {
     setTime(d.getTime());
   });
   $('speedSel').addEventListener('change', (e) => { state.speed = Number(e.target.value); });
-  $('playBtn').addEventListener('click', () => {
-    state.playing = !state.playing;
-    $('playBtn').textContent = state.playing ? '❚❚ หยุด' : '▶ เล่น';
+  const play = (on) => {
+    if (on && !state.playing) { const d = new Date(state.t); state.holdMin = d.getHours() * 60 + d.getMinutes(); }
+    state.playing = on;
+    $('playBtn').textContent = on ? '❚❚ หยุด' : '▶ เล่น';
+    $('yearBtn').textContent = on ? '❚❚ หยุด' : '▶ ดูโลกโคจรครบ 1 ปี';
     last = 0;
-    if (state.playing) requestAnimationFrame(tick);
+    if (on) requestAnimationFrame(tick); else schedule();
+  };
+  $('playBtn').addEventListener('click', () => play(!state.playing));
+  $('yearBtn').addEventListener('click', () => {
+    if (!state.playing) { state.speed = 2592000000; $('speedSel').value = String(state.speed); }
+    play(!state.playing);
   });
   $('nextEventBtn').addEventListener('click', () => {
     const jd = A.jdOf(new Date(state.t));
     const next = eventsAround(jd).find((e) => e.jd > jd + 1 / 1440);
     setTime(A.dateOf(next.jd).getTime());
   });
-  window.addEventListener('resize', () => { layout(); schedule(); });
+  window.addEventListener('resize', () => { layout(); layoutBird(); schedule(); });
   layout();
+  layoutBird();
   render();
   document.fonts?.ready.then(schedule);
 }
