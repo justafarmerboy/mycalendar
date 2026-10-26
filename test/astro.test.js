@@ -47,3 +47,22 @@ test('bright limb of the Moon as seen in the sky', () => {
   assert.ok(lon > 225 && lon < 315, String(lon));
   assert.ok(syd > 45 && syd < 135, String(syd));
 });
+
+test('eclipses 2025-2027 (NASA dates and types)', async () => {
+  const E = await import('../js/eclipse.js');
+  const got = E.eclipsesFrom(A.jdOf(new Date('2025-01-01T00:00Z')), 36)
+    .map((e) => `${A.dateOf(e.jd).toISOString().slice(0, 10)} ${e.type}`);
+  assert.deepEqual(got, [
+    '2025-03-14 lunar-total', '2025-03-29 solar-partial', '2025-09-07 lunar-total', '2025-09-21 solar-partial',
+    '2026-02-17 solar-annular', '2026-03-03 lunar-total', '2026-08-12 solar-total', '2026-08-28 lunar-partial',
+    '2027-02-06 solar-annular', '2027-02-20 lunar-penumbral', '2027-07-18 lunar-penumbral', '2027-08-02 solar-total',
+    '2027-08-17 lunar-penumbral',
+  ]);
+  const total = E.eclipsesFrom(A.jdOf(new Date('2026-03-01T00:00Z')), 1).find((e) => e.type === 'lunar-total');
+  assert.ok(Math.abs(A.dateOf(total.jd) - new Date('2026-03-03T11:33Z')) < 10 * 60000);
+  // the annular eclipse of 26 Dec 2019 was seen as partial in Bangkok; 8 Apr 2024 was not seen there
+  const dec2019 = E.solarEclipse(A.findMoonPhase(A.jdOf(new Date('2019-12-24T00:00Z')), 0));
+  assert.ok(E.localView(dec2019, 13.75, 100.5).magnitude > 0.4);
+  const apr2024 = E.solarEclipse(A.findMoonPhase(A.jdOf(new Date('2024-04-06T00:00Z')), 0));
+  assert.equal(E.localView(apr2024, 13.75, 100.5).visible, false);
+});

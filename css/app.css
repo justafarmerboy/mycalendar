@@ -31,6 +31,7 @@ main { max-width: 1200px; margin: 0 auto; padding: 0 16px 24px; }
 .stage-date { position: absolute; top: 10px; left: 0; right: 0; text-align: center; font-weight: 600; font-size: 1.05rem; text-shadow: 0 1px 4px #000; pointer-events: none; }
 .stage-event { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); background: rgba(245, 185, 66, .15); border: 1px solid var(--accent); color: var(--accent); padding: 2px 12px; border-radius: 99px; font-weight: 600; white-space: nowrap; }
 
+.legend { color: var(--muted); font-size: .85rem; margin: 6px 2px 0; }
 .bird-stage { margin-top: 20px; }
 .stage-title { position: absolute; top: 8px; right: 12px; margin: 0; font-size: .95rem; color: var(--muted); font-weight: 600; pointer-events: none; }
 #bird { display: block; width: 100%; }
@@ -60,13 +61,19 @@ input[type=date] { color-scheme: dark; }
 .time output { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 3.2em; }
 .time input { flex: 1; accent-color: var(--accent); }
 
-.cards { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.cards { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
 .card h2 { margin: 0 0 8px; font-size: 1.1rem; color: var(--accent); }
 .big { font-size: 1.25rem; font-weight: 700; margin: 0; }
 .muted { color: var(--muted); margin: 0; }
 .card p { margin: 2px 0; }
 
+#eclipseView { display: block; width: 100%; max-width: 360px; margin: 8px auto 0; }
+#eclipseView text { fill: var(--muted); font-size: 10px; font-family: inherit; }
+.events.eclipses li { display: block; }
+.eclipses .top { display: flex; justify-content: space-between; gap: 8px; }
+.eclipses .vis { color: var(--muted); font-size: .88rem; }
+.eclipses .vis.yes { color: #7ee2a8; }
 #yearWheel, #phaseRing { display: block; width: 100%; max-width: 340px; margin: 8px auto 0; }
 #yearWheel text, #phaseRing text { fill: var(--muted); font-size: 11px; font-family: inherit; }
 #yearWheel text.ev { fill: var(--text); font-weight: 600; }

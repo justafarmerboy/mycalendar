@@ -30,7 +30,9 @@ export function sun(jd) {
   const dec = Math.asin(sin(eps) * sin(lon)) / RAD;
   const ra = norm360(Math.atan2(cos(eps) * sin(lon), cos(lon)) / RAD);
   const eot = norm180(L0 - 0.0057183 - ra) * 4; // minutes; sundial minus clock
-  return { lon, trueLon: norm360(trueLon), dec, ra, eps, eot };
+  const e = 0.016708634 - 0.000042037 * T;
+  const dist = (1.000001018 * (1 - e * e)) / (1 + e * cos(M + C)); // AU
+  return { lon, trueLon: norm360(trueLon), dec, ra, eps, eot, dist };
 }
 
 /** Geocentric ecliptic longitude of the Moon (main periodic terms of Meeus ch. 47). */
@@ -130,6 +132,28 @@ export function subsolarPoint(jd) {
   return { lat: s.dec, lng: norm180(-15 * (utHours - 12 + s.eot / 60)) };
 }
 
+/** Distance Earth-Moon in km (main terms of Meeus table 47.A). */
+export function moonDist(jd) {
+  const T = centuries(jd);
+  const D = 297.8501921 + 445267.1114034 * T;
+  const M = 357.5291092 + 35999.0502909 * T;
+  const Mp = 134.9633964 + 477198.8675055 * T;
+  const F = 93.272095 + 483202.0175233 * T;
+  const terms = [
+    [-20905355, 0, 0, 1, 0], [-3699111, 2, 0, -1, 0], [-2955968, 2, 0, 0, 0], [-569925, 0, 0, 2, 0],
+    [48888, 0, 1, 0, 0], [-3149, 0, 0, 0, 2], [246158, 2, 0, -2, 0], [-152138, 2, -1, -1, 0],
+    [-170733, 2, 0, 1, 0], [-204586, 2, -1, 0, 0], [-129620, 0, 1, -1, 0], [108743, 1, 0, 0, 0],
+    [104755, 0, 1, 1, 0], [10321, 2, 0, 0, -2], [79661, 0, 0, 1, -2], [-34782, 4, 0, -1, 0],
+    [-23210, 0, 0, 3, 0], [-21636, 4, 0, -2, 0], [24208, 2, 1, -1, 0], [30824, 2, 1, 0, 0],
+    [-8379, 1, 0, -1, 0], [-16675, 1, 1, 0, 0], [-12831, 2, -1, 1, 0], [-10445, 2, 0, 2, 0],
+    [-11650, 4, 0, 0, 0], [14403, 2, 0, -3, 0], [-7003, 0, 1, -2, 0], [10056, 2, -1, -2, 0],
+    [6322, 1, 0, 1, 0], [-9884, 2, -2, 0, 0], [5751, 0, 1, 2, 0], [-4950, 2, -2, -1, 0],
+  ];
+  let sum = 0;
+  for (const [c, d, m, mp, f] of terms) sum += c * cos(d * D + m * M + mp * Mp + f * F);
+  return 385000.56 + sum / 1000;
+}
+
 /** Geocentric ecliptic latitude of the Moon (main terms of Meeus table 47.B), degrees. */
 export function moonLat(jd) {
   const T = centuries(jd);
@@ -145,7 +169,7 @@ export function moonLat(jd) {
 }
 
 // ecliptic -> equatorial (right ascension, declination), degrees
-function toEquatorial(lon, lat, eps) {
+export function toEquatorial(lon, lat, eps) {
   const ra = norm360(Math.atan2(sin(lon) * cos(eps) - Math.tan(lat * RAD) * sin(eps), cos(lon)) / RAD);
   const dec = Math.asin(sin(lat) * cos(eps) + cos(lat) * sin(eps) * sin(lon)) / RAD;
   return { ra, dec };

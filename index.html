@@ -22,6 +22,9 @@
       <div class="stage-date" id="stageDate"></div>
       <div class="stage-event" id="stageEvent" hidden></div>
     </section>
+    <p class="legend">ดวงจันทร์ดวงเล็ก: ครึ่งที่หันหาดวงอาทิตย์สว่างเสมอ · เส้นสีฟ้า = ครึ่งที่หันหาโลก (ส่วนที่สว่างภายในเส้นฟ้าคือที่เราเห็น)
+      · เส้นทึบ = ทางโคจรจริงของดวงจันทร์ ขยายมุมเอียง 5° ให้เห็นชัด · จุดส้ม = จุดโหนด (จุดตัดระนาบวงโคจรโลก)
+      · กรวยสีแดงจาง = เงาโลก ดวงจันทร์เข้าเงาได้เฉพาะจันทร์เพ็ญที่อยู่ใกล้จุดโหนด จึงไม่เกิดจันทรุปราคาทุกเดือน</p>
 
     <section class="controls">
       <div class="row">
@@ -86,6 +89,14 @@
         <dl class="grid" id="moonInfo"></dl>
         <svg id="phaseRing" viewBox="-155 -125 310 268" aria-label="วงรอบข้างขึ้นข้างแรม"></svg>
         <ul class="events" id="moonList"></ul>
+      </article>
+
+      <article class="card">
+        <h2>อุปราคา</h2>
+        <p class="big" id="eclipseNext"></p>
+        <p class="muted" id="eclipseNote"></p>
+        <svg id="eclipseView" viewBox="-180 -110 360 220" aria-label="ทางผ่านของดวงจันทร์ในอุปราคาครั้งถัดไป"></svg>
+        <ul class="events eclipses" id="eclipseList"></ul>
       </article>
     </section>
 

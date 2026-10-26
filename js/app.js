@@ -2,6 +2,7 @@
 // and fills the season / day / moon cards for the chosen moment.
 import * as A from './astro.js';
 import { LAND_B64 } from './land.js';
+import * as E from './eclipse.js';
 
 const RAD = Math.PI / 180;
 const $ = (id) => document.getElementById(id);
@@ -179,7 +180,7 @@ const MARIA = [
  * The Moon as it really looks in the sky from the chosen place: the bright limb points at the Sun,
  * and the whole face turns as the Moon crosses the sky (a "boat" crescent in Thailand at dusk).
  */
-function renderMoon(sky) {
+function renderMoon(sky, shade = { umbra: 0, penumbra: 0 }) {
   const n = moonBig.width, img = mctx.createImageData(n, n), d = img.data, half = n / 2;
   const z0 = sky.limb * RAD, e = sky.elong * RAD;
   const Lx = -Math.sin(z0) * Math.sin(e), Ly = Math.cos(z0) * Math.sin(e), Lz = -Math.cos(e);
@@ -201,8 +202,8 @@ function renderMoon(sky) {
       const cosI = x * Lx + y * Ly + z * Lz;
       const lit = Math.min(1, Math.max(0, (cosI + 0.02) / 0.06));
       const b = (lit * (0.35 + 0.65 * Math.max(0, cosI) ** 0.5) + 0.07 * (1 - lit)) * alb;
-      const i = (py * n + px) * 4;
-      d[i] = 250 * b; d[i + 1] = 245 * b; d[i + 2] = 232 * b;
+      const i = (py * n + px) * 4, dim = 1 - 0.3 * shade.penumbra, u = shade.umbra;
+      d[i] = 250 * b * dim * (1 - 0.45 * u); d[i + 1] = 245 * b * dim * (1 - 0.8 * u); d[i + 2] = 232 * b * dim * (1 - 0.88 * u);
       d[i + 3] = 255 * Math.min(1, (1 - Math.sqrt(r2)) * half);
     }
   }
@@ -215,7 +216,7 @@ function renderMoon(sky) {
  * both lit and inside the blue outline is what we see from Earth, and that is what changes.
  * Vectors are x right, y up, z toward the viewer.
  */
-function drawMiniMoon(c, x, y, r, toSun, toEarth) {
+function drawMiniMoon(c, x, y, r, toSun, toEarth, shade = { umbra: 0, penumbra: 0 }) {
   const dpr = L.dpr, n = Math.max(8, Math.round(2 * r * dpr)), half = n / 2;
   const cv = drawMiniMoon.cv ??= document.createElement('canvas');
   cv.width = cv.height = n;
@@ -232,6 +233,10 @@ function drawMiniMoon(c, x, y, r, toSun, toEarth) {
       const k = Math.min(1, Math.max(0, (lit + 0.04) / 0.08));
       let cr = 43 + (232 - 43) * k, cg = 47 + (230 - 47) * k, cb = 56 + (220 - 56) * k;
       if (face > 0 && k < 0.5) { cr += 10; cg += 30; cb += 60; } // dark side facing Earth: faint blue
+      if (shade.penumbra > 0) { // in the Earth's shadow: dimmer, and coppery red in the umbra
+        const dim = 1 - 0.3 * shade.penumbra, u = shade.umbra;
+        cr = cr * dim * (1 - 0.35 * u); cg = cg * dim * (1 - 0.75 * u); cb = cb * dim * (1 - 0.85 * u);
+      }
       if (Math.abs(face) < line * 1.8) [cr, cg, cb] = [90, 170, 255]; // edge of the Earth-facing half
       const i = (py * n + px) * 4;
       d[i] = cr; d[i + 1] = cg; d[i + 2] = cb;
@@ -287,8 +292,44 @@ function drawScene(jd, phase) {
 
   const f = earthFrame(jd);
   // Moon's orbit: elongation 0 (new) is toward the Sun, 90 (first quarter) toward the viewer
-  const D = phase.elong * RAD;
-  const mx = ex - L.orbit * Math.cos(D), my = ey + L.orbitRy * Math.sin(D), mr = Math.max(7, R * 0.17);
+  // The Moon's orbit is tilted about 5 degrees, so it passes above or below the Earth's shadow at
+  // most full moons. Its latitude is drawn exaggerated (K px per degree), and the shadow is sized
+  // with the same scale, so the Moon touches it on screen exactly when there is a real eclipse.
+  const D = phase.elong * RAD, K = R * 0.25, beta = A.moonLat(jd);
+  const mr = Math.max(6, R * 0.12);
+  const mx = ex - L.orbit * Math.cos(D), my = ey + L.orbitRy * Math.sin(D) - beta * K;
+  const cover = E.shadowCover(jd);
+  const path = [];
+  for (let k = 0; k <= 72; k++) { // one month of the Moon's path around the current position
+    const t = jd + (k / 72 - 0.5) * 29.53;
+    const d = (A.moonLon(t) - A.sun(t).trueLon) * RAD;
+    path.push([ex - L.orbit * Math.cos(d), ey + L.orbitRy * Math.sin(d) - A.moonLat(t) * K, Math.sin(d), A.moonLat(t)]);
+  }
+  const drawPath = (front) => {
+    ctx.strokeStyle = 'rgba(207,214,228,.55)';
+    ctx.lineWidth = 1.5;
+    for (let k = 1; k < path.length; k++) {
+      const [x0, y0, s0, b0] = path[k - 1], [x1, y1, s1, b1] = path[k];
+      if ((s0 + s1 >= 0) !== front) continue;
+      ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+      if ((b0 < 0) !== (b1 < 0)) { // node: the Moon crosses the plane of the Earth's orbit
+        ctx.fillStyle = '#f5b942';
+        ctx.beginPath(); ctx.arc((x0 + x1) / 2, (y0 + y1) / 2, 3, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+  };
+  const shadowCone = () => { // not to scale; its width where the Moon passes follows the eclipse limits
+    const x1 = ex + L.orbit, x2 = x1 + R * 0.3;
+    // shadow is invisible against black space, so it is drawn as a faint tinted outline
+    for (const [lim, fill, line] of [[1.52, 'rgba(150,160,190,.10)', 'rgba(170,180,210,.35)'], [0.98, 'rgba(170,60,40,.22)', 'rgba(230,110,80,.6)']]) {
+      const h1 = lim * K - mr, h2 = h1 + ((h1 - R) / L.orbit) * (x2 - x1);
+      ctx.fillStyle = fill; ctx.strokeStyle = line; ctx.lineWidth = 1; ctx.setLineDash([5, 4]);
+      ctx.beginPath(); ctx.moveTo(ex, ey - R); ctx.lineTo(x1, ey - h1); ctx.lineTo(x2, ey - h2);
+      ctx.lineTo(x2, ey + h2); ctx.lineTo(x1, ey + h1); ctx.lineTo(ex, ey + R); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    label('เงาโลก', x2 - 4, ey - (0.98 * K - mr) - 8, 'rgba(230,140,110,.9)', 11, 'right');
+  };
   const orbitHalf = (front) => {
     ctx.strokeStyle = 'rgba(200,210,230,.35)';
     ctx.setLineDash([4, 5]);
@@ -307,11 +348,13 @@ function drawScene(jd, phase) {
   // is tilted the same way; the Sun is in the orbit plane, so the lit half always faces left
   const tilt = Math.asin(L.orbitRy / L.orbit);
   const smallMoon = () => {
-    drawMiniMoon(ctx, mx, my, mr, [-1, 0, 0], [Math.cos(D), Math.sin(D) * Math.sin(tilt), -Math.sin(D) * Math.cos(tilt)]);
+    drawMiniMoon(ctx, mx, my, mr, [-1, 0, 0], [Math.cos(D), Math.sin(D) * Math.sin(tilt), -Math.sin(D) * Math.cos(tilt)], cover);
     label('ดวงจันทร์', mx, my + mr + 15, '#cfd6e4', 12);
   };
   orbitHalf(false);
+  drawPath(false);
   if (Math.sin(D) < 0) smallMoon();
+  shadowCone();
   drawAxis(f, false);
 
   // Earth
@@ -326,16 +369,13 @@ function drawScene(jd, phase) {
   drawAxis(f, true);
 
   orbitHalf(true);
+  drawPath(true);
   if (Math.sin(D) >= 0) smallMoon();
-  if (W >= 900) {
-    label('ดวงจันทร์: ครึ่งที่หันหาดวงอาทิตย์สว่างเสมอ · เส้นฟ้า = ครึ่งที่หันหาโลก', 14, H - 30, '#8f9bb5', 12, 'left');
-    label('ส่วนที่สว่างและอยู่ในเส้นฟ้า คือที่เราเห็นจากโลก', 14, H - 14, '#8f9bb5', 12, 'left');
-  }
 
   // Moon as seen in the sky from the chosen place, on the right
   const sky = A.moonSky(jd, state.place.lat, state.place.lng);
   const up = sky.alt > -0.5;
-  renderMoon(sky);
+  renderMoon(sky, cover);
   ctx.globalAlpha = up ? 1 : 0.4;
   const glowM = ctx.createRadialGradient(L.moonX, L.moonY, L.moonR, L.moonX, L.moonY, L.moonR * 1.5);
   glowM.addColorStop(0, `rgba(220,225,240,${0.25 * phase.illum})`);
@@ -354,7 +394,8 @@ function drawScene(jd, phase) {
     ctx.closePath(); ctx.fill();
   }
   label(moonPhaseName(phase.elong).name, L.moonX, L.moonY + L.moonR + 22, '#e6ebf5', 15);
-  label(up ? `สว่าง ${Math.round(sky.illum * 100)}% · มุมเงย ${Math.round(sky.alt)}°` : 'ตอนนี้อยู่ใต้ขอบฟ้า',
+  const inShadow = cover.umbra > 0.99 ? 'อยู่ในเงามืดของโลก' : cover.umbra > 0 ? 'เข้าเงามืดของโลกบางส่วน' : cover.penumbra > 0 ? 'อยู่ในเงามัวของโลก' : '';
+  label(!up ? `ตอนนี้อยู่ใต้ขอบฟ้า${inShadow ? ' · ' + inShadow : ''}` : inShadow ? `${inShadow} · มุมเงย ${Math.round(sky.alt)}°` : `สว่าง ${Math.round(sky.illum * 100)}% · มุมเงย ${Math.round(sky.alt)}°`,
     L.moonX, L.moonY + L.moonR + 40, '#8f9bb5', 12);
   label(`ฟ้าที่${state.place.name} (บน = เหนือศีรษะ)`, L.moonX, L.moonY - L.moonR - 12, '#8f9bb5', 12);
 }
@@ -524,7 +565,15 @@ function drawBird(jd, phase) {
   bctx.strokeStyle = 'rgba(200,210,230,.25)'; bctx.lineWidth = 1;
   bctx.beginPath(); bctx.arc(x, y, mo, 0, Math.PI * 2); bctx.stroke();
   const mx = x + mo * Math.cos(ma), my = y - mo * Math.sin(ma), mr = Math.max(7, rb * 0.26);
-  drawMiniMoon(bctx, mx, my, mr, [Math.cos(sa), Math.sin(sa), 0], [-Math.cos(ma), -Math.sin(ma), 0]);
+  const away = sa + Math.PI, sl = mo + rb * 1.2; // the Earth's shadow points away from the Sun
+  bctx.fillStyle = 'rgba(0,0,0,.4)';
+  bctx.beginPath();
+  bctx.moveTo(x - rb * Math.sin(away), y - rb * Math.cos(away));
+  bctx.lineTo(x + sl * Math.cos(away) - rb * 0.45 * Math.sin(away), y - sl * Math.sin(away) - rb * 0.45 * Math.cos(away));
+  bctx.lineTo(x + sl * Math.cos(away) + rb * 0.45 * Math.sin(away), y - sl * Math.sin(away) + rb * 0.45 * Math.cos(away));
+  bctx.lineTo(x + rb * Math.sin(away), y + rb * Math.cos(away));
+  bctx.closePath(); bctx.fill();
+  drawMiniMoon(bctx, mx, my, mr, [Math.cos(sa), Math.sin(sa), 0], [-Math.cos(ma), -Math.sin(ma), 0], E.shadowCover(jd));
   renderGlobe(f, birdGlobe);
   const atm = bctx.createRadialGradient(x, y, rb * 0.98, x, y, rb * 1.12);
   atm.addColorStop(0, 'rgba(120,180,255,.45)'); atm.addColorStop(1, 'rgba(120,180,255,0)');
@@ -650,9 +699,12 @@ function renderCards(jd, phase) {
   const list = $('seasonList');
   list.replaceChildren(...evs.filter((e) => e.jd > jd - 200 && e.jd < jd + 200).slice(0, 4)
     .map((e) => eventItem(`${e.name} <small class="muted">${e.en}</small>`, e.jd, jd)));
-  const today = evs.find((e) => localDayNumber(A.dateOf(e.jd).getTime()) === localDayNumber(state.t));
-  $('stageEvent').hidden = !today;
-  if (today) $('stageEvent').textContent = `วันนี้คือ${today.name} (${today.en}) ${fmtTime.format(A.dateOf(today.jd))} น.`;
+  const sameDay = (e) => localDayNumber(A.dateOf(e.jd).getTime()) === localDayNumber(state.t);
+  const today = evs.find(sameDay), eclipse = renderEclipses(jd).find(sameDay);
+  const pill = [today && `วันนี้คือ${today.name} (${today.en}) ${fmtTime.format(A.dateOf(today.jd))} น.`,
+    eclipse && `วันนี้มี${eclipse.name} ${fmtTime.format(A.dateOf(eclipse.jd))} น.`].filter(Boolean).join(' · ');
+  $('stageEvent').hidden = !pill;
+  $('stageEvent').textContent = pill;
 
   // day cycle at the chosen place
   const p = state.place, st = A.sunTimes(jd, p.lat, p.lng);
@@ -691,6 +743,72 @@ function renderCards(jd, phase) {
   const names = [[0, 'จันทร์ดับ'], [90, 'ข้างขึ้น ครึ่งดวง'], [180, 'จันทร์เพ็ญ'], [270, 'ข้างแรม ครึ่งดวง']];
   const upcoming = names.map(([t, n]) => ({ n, jd: A.findMoonPhase(jd, t) })).sort((a, b) => a.jd - b.jd);
   $('moonList').replaceChildren(...upcoming.map((e) => eventItem(e.n, e.jd, jd)));
+}
+
+// ---------- eclipses ----------
+let eclipseCache = { key: '', list: [] };
+function upcomingEclipses(jd) {
+  const key = Math.floor(jd / 29.53);
+  if (eclipseCache.key !== key) eclipseCache = { key, list: E.eclipsesFrom(key * 29.53 - 30, 44), views: {} };
+  return eclipseCache.list;
+}
+
+function viewOf(ec) {
+  const p = state.place, k = `${ec.jd}:${p.lat}:${p.lng}`;
+  return (eclipseCache.views[k] ??= E.localView(ec, p.lat, p.lng));
+}
+
+function visibility(ec) {
+  const v = viewOf(ec), here = state.place.name;
+  if (ec.type.startsWith('lunar')) return v.visible ? [true, `เห็นได้ที่${here}`] : [false, `ไม่เห็นที่${here} (ดวงจันทร์อยู่ใต้ขอบฟ้า)`];
+  if (!v.visible) return [false, `ไม่เห็นที่${here}`];
+  if (v.magnitude > 0.98) return [true, `${here}อยู่ในแนวคราสเต็มดวง/วงแหวน`];
+  return [true, `เห็นบางส่วนที่${here} บังมากสุด ${Math.round(v.magnitude * 100)}% (${fmtTime.format(A.dateOf(v.jd))} น.)`];
+}
+
+// To-scale view of the next eclipse: the Moon crossing the Earth's shadow, or crossing the Sun
+function renderEclipseView(ec) {
+  const lunar = ec.type.startsWith('lunar'), pts = E.pathAround(ec, lunar ? 3 : 2.5, 0.5);
+  const S = 110 / (lunar ? Math.max(ec.penumbra + ec.moonR, 1.2) : 1.1); // px per degree
+  const X = (p) => -p.x * S, Y = (p) => -p.y * S; // east is on the left, as in the sky
+  let html = '';
+  if (lunar) {
+    html += `<circle r="${ec.penumbra * S}" fill="rgba(120,130,160,.18)" stroke="#3a4766"/>`
+      + `<circle r="${ec.umbra * S}" fill="rgba(160,60,40,.35)" stroke="#a5523f"/>`
+      + `<text y="${-ec.umbra * S - 4}" text-anchor="middle">เงามืด</text><text y="${-ec.penumbra * S - 4}" text-anchor="middle">เงามัว</text>`;
+  } else {
+    html += `<circle r="${ec.sunR * S}" fill="#ffd34d"/>`;
+  }
+  html += `<polyline points="${pts.map((p) => `${X(p)},${Y(p)}`).join(' ')}" fill="none" stroke="#8f9bb5" stroke-dasharray="3 3"/>`;
+  for (const p of pts) {
+    if (Math.abs(p.h % 1) > 1e-6) continue;
+    const r = ec.moonR * S, main = Math.abs(p.h) < 1e-6;
+    html += `<circle cx="${X(p)}" cy="${Y(p)}" r="${r}" fill="${lunar ? (main ? 'rgba(232,230,220,.85)' : 'rgba(232,230,220,.35)') : (main ? '#1b2235' : 'rgba(27,34,53,.55)')}" stroke="${main ? '#f5b942' : '#3a4766'}"/>`;
+    if (!main && Math.abs(p.h) <= 2) html += `<text x="${X(p)}" y="${Y(p) + r + 11}" text-anchor="middle">${p.h > 0 ? '+' : ''}${p.h} ชม.</text>`;
+  }
+  const hh = lunar ? 110 : 62; // the Sun is small, so the solar view needs less height
+  html += `<text x="-175" y="${hh - 6}">← ตะวันออก</text><text x="175" y="${hh - 6}" text-anchor="end">ตะวันตก →</text>`;
+  $('eclipseView').setAttribute('viewBox', `-180 ${-hh} 360 ${2 * hh}`);
+  $('eclipseView').innerHTML = html;
+}
+
+function renderEclipses(jd) {
+  const list = upcomingEclipses(jd);
+  const next = list.find((e) => e.jd > jd - 0.2) ?? list[list.length - 1];
+  const d = A.dateOf(next.jd);
+  $('eclipseNext').textContent = `${next.name} ${fmtShort.format(d)}`;
+  const [, vis] = visibility(next);
+  $('eclipseNote').textContent = `${fmtTime.format(d)} น. · ${vis} · ภาพด้านล่างย่อส่วนจริง ${next.type.startsWith('lunar') ? 'ดวงจันทร์เคลื่อนผ่านเงาโลก' : 'ดวงจันทร์เคลื่อนผ่านหน้าดวงอาทิตย์ (มองจากใจกลางโลก)'} ทุก 1 ชั่วโมง`;
+  renderEclipseView(next);
+  const items = list.filter((e) => e.jd > jd - 0.2).slice(0, 6).map((e) => {
+    const [yes, text] = visibility(e);
+    const li = document.createElement('li');
+    li.innerHTML = `<div class="top"><span>${e.name}</span><span class="when">${when(A.dateOf(e.jd))}</span></div><span class="vis${yes ? ' yes' : ''}">${text}</span>`;
+    li.addEventListener('click', () => setTime(A.dateOf(e.jd).getTime()));
+    return li;
+  });
+  $('eclipseList').replaceChildren(...items);
+  return list;
 }
 
 // ---------- state ----------
