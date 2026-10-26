@@ -209,6 +209,39 @@ function renderMoon(sky) {
   mctx.putImageData(img, 0, 0);
 }
 
+/**
+ * Small Moon seen from outside: the half facing the Sun is always lit (toSun), so on its own it
+ * never changes. The blue outline marks the half facing the Earth (toEarth); the part that is
+ * both lit and inside the blue outline is what we see from Earth, and that is what changes.
+ * Vectors are x right, y up, z toward the viewer.
+ */
+function drawMiniMoon(c, x, y, r, toSun, toEarth) {
+  const dpr = L.dpr, n = Math.max(8, Math.round(2 * r * dpr)), half = n / 2;
+  const cv = drawMiniMoon.cv ??= document.createElement('canvas');
+  cv.width = cv.height = n;
+  const c2 = cv.getContext('2d'), img = c2.createImageData(n, n), d = img.data;
+  const line = 1.6 / half;
+  for (let py = 0; py < n; py++) {
+    const v = 1 - (py + 0.5) / half;
+    for (let px = 0; px < n; px++) {
+      const u = (px + 0.5) / half - 1, r2 = u * u + v * v;
+      if (r2 > 1) continue;
+      const w = Math.sqrt(1 - r2);
+      const lit = u * toSun[0] + v * toSun[1] + w * toSun[2];
+      const face = u * toEarth[0] + v * toEarth[1] + w * toEarth[2];
+      const k = Math.min(1, Math.max(0, (lit + 0.04) / 0.08));
+      let cr = 43 + (232 - 43) * k, cg = 47 + (230 - 47) * k, cb = 56 + (220 - 56) * k;
+      if (face > 0 && k < 0.5) { cr += 10; cg += 30; cb += 60; } // dark side facing Earth: faint blue
+      if (Math.abs(face) < line * 1.8) [cr, cg, cb] = [90, 170, 255]; // edge of the Earth-facing half
+      const i = (py * n + px) * 4;
+      d[i] = cr; d[i + 1] = cg; d[i + 2] = cb;
+      d[i + 3] = 255 * Math.min(1, (1 - Math.sqrt(r2)) * half);
+    }
+  }
+  c2.putImageData(img, 0, 0);
+  c.drawImage(cv, x - r, y - r, 2 * r, 2 * r);
+}
+
 function label(text, x, y, color = '#e6ebf5', size = 14, align = 'center') {
   ctx.font = `600 ${size}px Sarabun, system-ui, sans-serif`;
   ctx.textAlign = align;
@@ -255,7 +288,7 @@ function drawScene(jd, phase) {
   const f = earthFrame(jd);
   // Moon's orbit: elongation 0 (new) is toward the Sun, 90 (first quarter) toward the viewer
   const D = phase.elong * RAD;
-  const mx = ex - L.orbit * Math.cos(D), my = ey + L.orbitRy * Math.sin(D), mr = Math.max(5, R * 0.14);
+  const mx = ex - L.orbit * Math.cos(D), my = ey + L.orbitRy * Math.sin(D), mr = Math.max(7, R * 0.17);
   const orbitHalf = (front) => {
     ctx.strokeStyle = 'rgba(200,210,230,.35)';
     ctx.setLineDash([4, 5]);
@@ -270,11 +303,11 @@ function drawScene(jd, phase) {
       ctx.beginPath(); ctx.moveTo(ax + 7, ay - 0.6); ctx.lineTo(ax - 3, ay - 5); ctx.lineTo(ax - 3, ay + 4); ctx.closePath(); ctx.fill();
     }
   };
+  // the orbit is drawn as seen from a little above its plane (tilt t), so the Earth-facing half
+  // is tilted the same way; the Sun is in the orbit plane, so the lit half always faces left
+  const tilt = Math.asin(L.orbitRy / L.orbit);
   const smallMoon = () => {
-    ctx.fillStyle = '#2b2f38';
-    ctx.beginPath(); ctx.arc(mx, my, mr, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#e8e6dc';
-    ctx.beginPath(); ctx.arc(mx, my, mr, Math.PI / 2, Math.PI * 1.5); ctx.fill(); // lit half faces the Sun
+    drawMiniMoon(ctx, mx, my, mr, [-1, 0, 0], [Math.cos(D), Math.sin(D) * Math.sin(tilt), -Math.sin(D) * Math.cos(tilt)]);
     label('ดวงจันทร์', mx, my + mr + 15, '#cfd6e4', 12);
   };
   orbitHalf(false);
@@ -294,6 +327,10 @@ function drawScene(jd, phase) {
 
   orbitHalf(true);
   if (Math.sin(D) >= 0) smallMoon();
+  if (W >= 900) {
+    label('ดวงจันทร์: ครึ่งที่หันหาดวงอาทิตย์สว่างเสมอ · เส้นฟ้า = ครึ่งที่หันหาโลก', 14, H - 30, '#8f9bb5', 12, 'left');
+    label('ส่วนที่สว่างและอยู่ในเส้นฟ้า คือที่เราเห็นจากโลก', 14, H - 14, '#8f9bb5', 12, 'left');
+  }
 
   // Moon as seen in the sky from the chosen place, on the right
   const sky = A.moonSky(jd, state.place.lat, state.place.lng);
@@ -486,9 +523,8 @@ function drawBird(jd, phase) {
   const mo = rb * 1.75, sa = Math.atan2(f.toSun[1], f.toSun[0]), ma = sa + phase.elong * RAD;
   bctx.strokeStyle = 'rgba(200,210,230,.25)'; bctx.lineWidth = 1;
   bctx.beginPath(); bctx.arc(x, y, mo, 0, Math.PI * 2); bctx.stroke();
-  const mx = x + mo * Math.cos(ma), my = y - mo * Math.sin(ma), mr = Math.max(4, rb * 0.22);
-  bctx.fillStyle = '#2b2f38'; bctx.beginPath(); bctx.arc(mx, my, mr, 0, Math.PI * 2); bctx.fill();
-  bctx.fillStyle = '#e8e6dc'; bctx.beginPath(); bctx.arc(mx, my, mr, -sa - Math.PI / 2, -sa + Math.PI / 2); bctx.fill();
+  const mx = x + mo * Math.cos(ma), my = y - mo * Math.sin(ma), mr = Math.max(7, rb * 0.26);
+  drawMiniMoon(bctx, mx, my, mr, [Math.cos(sa), Math.sin(sa), 0], [-Math.cos(ma), -Math.sin(ma), 0]);
   renderGlobe(f, birdGlobe);
   const atm = bctx.createRadialGradient(x, y, rb * 0.98, x, y, rb * 1.12);
   atm.addColorStop(0, 'rgba(120,180,255,.45)'); atm.addColorStop(1, 'rgba(120,180,255,0)');
