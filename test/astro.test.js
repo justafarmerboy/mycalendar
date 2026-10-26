@@ -36,3 +36,14 @@ test('subsolar point', () => {
   assert.ok(Math.abs(p.lat - 23.43) < 0.05);
   assert.ok(Math.abs(p.lng - 0.4) < 1, String(p.lng));
 });
+
+test('bright limb of the Moon as seen in the sky', () => {
+  const limb = (iso, lat, lng) => A.moonSky(A.jdOf(new Date(iso)), lat, lng).limb;
+  // evening crescent in Bangkok lies like a boat: lit underneath
+  const bkk = limb('2026-10-13T11:45Z', 13.75, 100.5);
+  assert.ok(bkk > 180 && bkk < 250, String(bkk));
+  // first quarter: lit on the right in London, on the left in Sydney
+  const lon = limb('2026-10-19T18:00Z', 51.5, -0.13), syd = limb('2026-10-19T09:30Z', -33.87, 151.2);
+  assert.ok(lon > 225 && lon < 315, String(lon));
+  assert.ok(syd > 45 && syd < 135, String(syd));
+});

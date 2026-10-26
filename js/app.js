@@ -158,14 +158,32 @@ function renderGlobe(f, cv = globe) {
   c2.putImageData(img, 0, 0);
 }
 
-// Maria (dark seas) of the near side, as [x, y, radius] on the unit disk, north up.
-const MARIA = [[-0.32, 0.38, 0.22], [-0.05, 0.42, 0.16], [0.18, 0.32, 0.14], [0.36, 0.42, 0.12], [-0.45, -0.02, 0.24],
-  [0.1, 0.05, 0.13], [0.3, 0.08, 0.13], [0.5, 0.18, 0.1], [-0.2, -0.3, 0.12], [0.2, -0.22, 0.1]];
+// Maria (dark seas) and the bright crater Tycho, as [x, y, radius, depth] on the unit disk, lunar north up.
+const MARIA = [
+  [-0.3, 0.45, 0.22, 0.2], // Imbrium
+  [0.18, 0.42, 0.14, 0.2], // Serenitatis
+  [0.05, 0.24, 0.07, 0.15], // Vaporum
+  [0.3, 0.15, 0.17, 0.2], // Tranquillitatis
+  [0.64, 0.3, 0.1, 0.22], // Crisium
+  [0.55, -0.08, 0.12, 0.18], // Fecunditatis
+  [0.36, -0.27, 0.08, 0.16], // Nectaris
+  [-0.58, 0.1, 0.28, 0.17], // Oceanus Procellarum
+  [-0.25, -0.17, 0.11, 0.12], // Cognitum
+  [-0.14, -0.36, 0.14, 0.16], // Nubium
+  [-0.43, -0.38, 0.08, 0.18], // Humorum
+  [0.0, 0.7, 0.07, 0.14], [-0.2, 0.68, 0.06, 0.12], [0.2, 0.68, 0.06, 0.12], // Frigoris
+  [-0.12, -0.72, 0.04, -0.25], // Tycho (bright)
+];
 
-/** Moon as seen from Earth (northern hemisphere): waxing = lit on the right. */
-function renderMoon(elong) {
+/**
+ * The Moon as it really looks in the sky from the chosen place: the bright limb points at the Sun,
+ * and the whole face turns as the Moon crosses the sky (a "boat" crescent in Thailand at dusk).
+ */
+function renderMoon(sky) {
   const n = moonBig.width, img = mctx.createImageData(n, n), d = img.data, half = n / 2;
-  const e = elong * RAD, Lx = Math.sin(e), Lz = -Math.cos(e);
+  const z0 = sky.limb * RAD, e = sky.elong * RAD;
+  const Lx = -Math.sin(z0) * Math.sin(e), Ly = Math.cos(z0) * Math.sin(e), Lz = -Math.cos(e);
+  const cn = Math.cos(sky.north * RAD), sn = Math.sin(sky.north * RAD);
   for (let py = 0; py < n; py++) {
     const y = 1 - (py + 0.5) / half;
     for (let px = 0; px < n; px++) {
@@ -173,14 +191,16 @@ function renderMoon(elong) {
       const r2 = x * x + y * y;
       if (r2 > 1) continue;
       const z = Math.sqrt(1 - r2);
+      const tx = x * cn + y * sn, ty = -x * sn + y * cn; // screen -> lunar map (north up)
       let alb = 0.82;
-      for (const [mx, my, mr] of MARIA) {
-        const dd = ((x - mx) ** 2 + (y - my) ** 2) / (mr * mr);
-        if (dd < 1) alb -= 0.2 * (1 - dd) ** 0.7;
+      for (const [mx, my, mr, k] of MARIA) {
+        const dd = ((tx - mx) ** 2 + (ty - my) ** 2) / (mr * mr);
+        if (dd < 1) alb -= k * (1 - dd) ** 0.7;
       }
-      alb += 0.015 * Math.sin(x * 37 + y * 11) * Math.sin(y * 29 - x * 7);
-      const lit = Math.min(1, Math.max(0, (x * Lx + z * Lz + 0.02) / 0.06));
-      const b = (lit * (0.35 + 0.65 * Math.max(0, x * Lx + z * Lz) ** 0.5) + 0.07 * (1 - lit)) * alb;
+      alb += 0.015 * Math.sin(tx * 37 + ty * 11) * Math.sin(ty * 29 - tx * 7);
+      const cosI = x * Lx + y * Ly + z * Lz;
+      const lit = Math.min(1, Math.max(0, (cosI + 0.02) / 0.06));
+      const b = (lit * (0.35 + 0.65 * Math.max(0, cosI) ** 0.5) + 0.07 * (1 - lit)) * alb;
       const i = (py * n + px) * 4;
       d[i] = 250 * b; d[i + 1] = 245 * b; d[i + 2] = 232 * b;
       d[i + 3] = 255 * Math.min(1, (1 - Math.sqrt(r2)) * half);
@@ -275,17 +295,31 @@ function drawScene(jd, phase) {
   orbitHalf(true);
   if (Math.sin(D) >= 0) smallMoon();
 
-  // Moon as seen from Earth, on the right
-  renderMoon(phase.elong);
+  // Moon as seen in the sky from the chosen place, on the right
+  const sky = A.moonSky(jd, state.place.lat, state.place.lng);
+  const up = sky.alt > -0.5;
+  renderMoon(sky);
+  ctx.globalAlpha = up ? 1 : 0.4;
   const glowM = ctx.createRadialGradient(L.moonX, L.moonY, L.moonR, L.moonX, L.moonY, L.moonR * 1.5);
   glowM.addColorStop(0, `rgba(220,225,240,${0.25 * phase.illum})`);
   glowM.addColorStop(1, 'rgba(220,225,240,0)');
   ctx.fillStyle = glowM;
   ctx.beginPath(); ctx.arc(L.moonX, L.moonY, L.moonR * 1.5, 0, Math.PI * 2); ctx.fill();
   ctx.drawImage(moonBig, L.moonX - L.moonR, L.moonY - L.moonR, 2 * L.moonR, 2 * L.moonR);
+  ctx.globalAlpha = 1;
+  if (sky.illum > 0.02 && sky.illum < 0.98) { // small arrow from the bright limb toward the Sun
+    const z0 = sky.limb * RAD, ux = -Math.sin(z0), uy = -Math.cos(z0), r0 = L.moonR + 6;
+    ctx.fillStyle = '#ffd34d';
+    ctx.beginPath();
+    ctx.moveTo(L.moonX + ux * (r0 + 10), L.moonY + uy * (r0 + 10));
+    ctx.lineTo(L.moonX + ux * r0 - uy * 5, L.moonY + uy * r0 + ux * 5);
+    ctx.lineTo(L.moonX + ux * r0 + uy * 5, L.moonY + uy * r0 - ux * 5);
+    ctx.closePath(); ctx.fill();
+  }
   label(moonPhaseName(phase.elong).name, L.moonX, L.moonY + L.moonR + 22, '#e6ebf5', 15);
-  label(`สว่าง ${Math.round(phase.illum * 100)}%`, L.moonX, L.moonY + L.moonR + 40, '#8f9bb5', 12);
-  label('มองจากโลก', L.moonX, L.moonY - L.moonR - 10, '#8f9bb5', 12);
+  label(up ? `สว่าง ${Math.round(sky.illum * 100)}% · มุมเงย ${Math.round(sky.alt)}°` : 'ตอนนี้อยู่ใต้ขอบฟ้า',
+    L.moonX, L.moonY + L.moonR + 40, '#8f9bb5', 12);
+  label(`ฟ้าที่${state.place.name} (บน = เหนือศีรษะ)`, L.moonX, L.moonY - L.moonR - 12, '#8f9bb5', 12);
 }
 
 // Tilted axis through the poles. Drawn in two passes so the part behind the globe is hidden.
@@ -609,10 +643,14 @@ function renderCards(jd, phase) {
   const mp = moonPhaseName(phase.elong);
   $('moonName').textContent = mp.name;
   $('moonThai').textContent = `${thaiLunarDay(state.t, phase.lastNew)} (โดยประมาณ)`;
+  const sky = A.moonSky(jd, state.place.lat, state.place.lng);
+  const sides = ['ด้านบน', 'บนซ้าย', 'ด้านซ้าย', 'ล่างซ้าย', 'ด้านล่าง', 'ล่างขวา', 'ด้านขวา', 'บนขวา'];
   $('moonInfo').innerHTML = [
-    ['ส่วนที่สว่าง', `${(phase.illum * 100).toFixed(1)}%`],
+    ['ส่วนที่สว่าง', `${(sky.illum * 100).toFixed(1)}%`],
     ['อายุดวงจันทร์', `${phase.age.toFixed(1)} วัน`],
-    ['มุมห่างดวงอาทิตย์', `${phase.elong.toFixed(1)}°`],
+    ['มุมห่างดวงอาทิตย์', `${sky.elong.toFixed(1)}°`],
+    [`มุมเงยที่${state.place.name}`, sky.alt > -0.5 ? `${sky.alt.toFixed(0)}°` : `${sky.alt.toFixed(0)}° (ใต้ขอบฟ้า)`],
+    ['ด้านที่สว่างบนฟ้า', `${sides[Math.round(sky.limb / 45) % 8]} (หันไปทางดวงอาทิตย์)`],
   ].map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
   const names = [[0, 'จันทร์ดับ'], [90, 'ข้างขึ้น ครึ่งดวง'], [180, 'จันทร์เพ็ญ'], [270, 'ข้างแรม ครึ่งดวง']];
   const upcoming = names.map(([t, n]) => ({ n, jd: A.findMoonPhase(jd, t) })).sort((a, b) => a.jd - b.jd);

@@ -129,3 +129,57 @@ export function subsolarPoint(jd) {
   const utHours = (((jd + 0.5) % 1) + 1) % 1 * 24;
   return { lat: s.dec, lng: norm180(-15 * (utHours - 12 + s.eot / 60)) };
 }
+
+/** Geocentric ecliptic latitude of the Moon (main terms of Meeus table 47.B), degrees. */
+export function moonLat(jd) {
+  const T = centuries(jd);
+  const D = 297.8501921 + 445267.1114034 * T;
+  const M = 357.5291092 + 35999.0502909 * T;
+  const Mp = 134.9633964 + 477198.8675055 * T;
+  const F = 93.272095 + 483202.0175233 * T;
+  const E = 1 - 0.002516 * T;
+  return 5.128122 * sin(F) + 0.280602 * sin(Mp + F) + 0.277693 * sin(Mp - F) + 0.173237 * sin(2 * D - F)
+    + 0.055413 * sin(2 * D - Mp + F) + 0.046271 * sin(2 * D - Mp - F) + 0.032573 * sin(2 * D + F)
+    + 0.017198 * sin(2 * Mp + F) + 0.009266 * sin(2 * D + Mp - F) + 0.008822 * sin(2 * Mp - F)
+    + 0.008216 * E * sin(2 * D - M - F) + 0.004324 * sin(2 * D - 2 * Mp - F) + 0.0042 * sin(2 * D + Mp + F);
+}
+
+// ecliptic -> equatorial (right ascension, declination), degrees
+function toEquatorial(lon, lat, eps) {
+  const ra = norm360(Math.atan2(sin(lon) * cos(eps) - Math.tan(lat * RAD) * sin(eps), cos(lon)) / RAD);
+  const dec = Math.asin(sin(lat) * cos(eps) + cos(lat) * sin(eps) * sin(lon)) / RAD;
+  return { ra, dec };
+}
+
+/** Greenwich mean sidereal time, degrees. */
+export function gmst(jd) {
+  const t = jd - 2451545, T = t / 36525;
+  return norm360(280.46061837 + 360.98564736629 * t + 0.000387933 * T * T);
+}
+
+/**
+ * The Moon as an observer at (lat, lng) sees it.
+ * limb: direction of the bright limb, degrees counterclockwise from straight up (the zenith),
+ *       as the Moon appears in the sky; 0 = lit on top, 90 = lit on the left, 180 = lit underneath.
+ * north: direction of celestial north on the disk, same convention (the Moon's face turns with it).
+ * alt: altitude above the horizon (topocentric, approximate), phaseAngle: Sun-Moon-Earth angle.
+ */
+export function moonSky(jd, lat, lng) {
+  const s = sun(jd);
+  const m = toEquatorial(moonLon(jd), moonLat(jd), s.eps);
+  // the Sun's RA/Dec from its apparent longitude (latitude ~0)
+  const so = toEquatorial(s.lon, 0, s.eps);
+  const dRa = so.ra - m.ra;
+  const chi = Math.atan2(cos(so.dec) * sin(dRa), sin(so.dec) * cos(m.dec) - cos(so.dec) * sin(m.dec) * cos(dRa)) / RAD;
+  const H = gmst(jd) + lng - m.ra; // hour angle
+  const q = Math.atan2(sin(H), Math.tan(lat * RAD) * cos(m.dec) - sin(m.dec) * cos(H)) / RAD; // parallactic angle
+  const geoAlt = Math.asin(sin(lat) * sin(m.dec) + cos(lat) * cos(m.dec) * cos(H)) / RAD;
+  const elong = Math.acos(sin(so.dec) * sin(m.dec) + cos(so.dec) * cos(m.dec) * cos(dRa)) / RAD;
+  return {
+    limb: norm360(chi - q),
+    north: norm360(-q),
+    alt: geoAlt - 0.95 * cos(geoAlt), // horizontal parallax of the Moon is about 0.95 deg
+    elong,
+    illum: (1 - cos(elong)) / 2,
+  };
+}
