@@ -1,0 +1,85 @@
+:root {
+  --bg: #070b16;
+  --panel: #0f1628;
+  --line: #22304f;
+  --text: #e6ebf5;
+  --muted: #8f9bb5;
+  --accent: #f5b942;
+  --sun: #ffcf5a;
+  --moon: #cfd6e4;
+  --blue: #6fa8ff;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.5 'Sarabun', system-ui, sans-serif;
+}
+
+.top { padding: 16px 16px 4px; max-width: 1200px; margin: 0 auto; }
+.top h1 { margin: 0; font-size: 1.6rem; }
+.sub { margin: 0; color: var(--muted); }
+
+main { max-width: 1200px; margin: 0 auto; padding: 0 16px 24px; }
+
+.stage { position: relative; margin-top: 8px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #02040a; }
+#scene { display: block; width: 100%; }
+.stage-date { position: absolute; top: 10px; left: 0; right: 0; text-align: center; font-weight: 600; font-size: 1.05rem; text-shadow: 0 1px 4px #000; pointer-events: none; }
+.stage-event { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); background: rgba(245, 185, 66, .15); border: 1px solid var(--accent); color: var(--accent); padding: 2px 12px; border-radius: 99px; font-weight: 600; white-space: nowrap; }
+
+.controls { display: grid; gap: 8px; margin: 12px 0; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+button, select, input[type=date] {
+  font: inherit;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 12px;
+  min-height: 38px;
+}
+button { cursor: pointer; }
+button:hover { border-color: var(--muted); }
+button.accent { border-color: var(--accent); color: var(--accent); }
+input[type=date] { color-scheme: dark; }
+
+.time { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 260px; }
+.time output { font-variant-numeric: tabular-nums; font-weight: 600; min-width: 3.2em; }
+.time input { flex: 1; accent-color: var(--accent); }
+
+.cards { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.card h2 { margin: 0 0 8px; font-size: 1.1rem; color: var(--accent); }
+.big { font-size: 1.25rem; font-weight: 700; margin: 0; }
+.muted { color: var(--muted); margin: 0; }
+.card p { margin: 2px 0; }
+
+#yearWheel, #phaseRing { display: block; width: 100%; max-width: 340px; margin: 8px auto 0; }
+#yearWheel text, #phaseRing text { fill: var(--muted); font-size: 11px; font-family: inherit; }
+#yearWheel text.ev { fill: var(--text); font-weight: 600; }
+
+.events { list-style: none; padding: 0; margin: 10px 0 0; }
+.events li { display: flex; justify-content: space-between; gap: 8px; padding: 5px 0; border-top: 1px solid var(--line); cursor: pointer; }
+.events li:hover { color: var(--accent); }
+.events li.past { color: var(--muted); }
+.events .when { font-variant-numeric: tabular-nums; text-align: right; }
+
+.grid { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 10px 0 0; }
+.grid dt { color: var(--muted); }
+.grid dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+.daybar { position: relative; height: 22px; border-radius: 6px; background: #1a2238; margin-top: 10px; overflow: hidden; }
+.daybar .day { position: absolute; top: 0; bottom: 0; background: linear-gradient(90deg, #f59e42, #ffd76a 20%, #ffd76a 80%, #f59e42); }
+.daybar .now { position: absolute; top: -2px; bottom: -2px; width: 3px; margin-left: -1px; background: #fff; box-shadow: 0 0 4px #000; }
+.ticks { display: flex; justify-content: space-between; color: var(--muted); font-size: .8rem; }
+
+.foot { color: var(--muted); font-size: .85rem; margin-top: 16px; }
+
+@media (max-width: 520px) {
+  .stage-date { font-size: .9rem; }
+}

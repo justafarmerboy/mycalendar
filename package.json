@@ -1,0 +1,11 @@
+{
+  "name": "mycalendar",
+  "version": "0.1.0",
+  "description": "ปฏิทินฟ้า: โลก ดวงอาทิตย์ ดวงจันทร์ วิษุวัต อายัน ข้างขึ้นข้างแรม",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.test.js"
+  }
+}

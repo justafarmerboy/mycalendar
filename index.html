@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ปฏิทินฟ้า</title>
+  <meta name="description" content="ปฏิทินบอกรอบวัน วิษุวัต ครีษมายัน เหมายัน และข้างขึ้นข้างแรม แสดงโลก ดวงอาทิตย์ และดวงจันทร์">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <header class="top">
+    <h1>ปฏิทินฟ้า</h1>
+    <p class="sub">รอบวัน · วิษุวัต · อายัน · ข้างขึ้นข้างแรม</p>
+  </header>
+
+  <main>
+    <section class="stage">
+      <canvas id="scene" aria-label="โลกอยู่ตรงกลาง ดวงอาทิตย์อยู่ทางซ้าย ดวงจันทร์อยู่ทางขวา"></canvas>
+      <div class="stage-date" id="stageDate"></div>
+      <div class="stage-event" id="stageEvent" hidden></div>
+    </section>
+
+    <section class="controls">
+      <div class="row">
+        <button type="button" data-step="-1M" title="ย้อน 1 เดือน">« เดือน</button>
+        <button type="button" data-step="-1d" title="ย้อน 1 วัน">‹ วัน</button>
+        <input type="date" id="dateInput" aria-label="วันที่">
+        <button type="button" data-step="1d" title="ถัดไป 1 วัน">วัน ›</button>
+        <button type="button" data-step="1M" title="ถัดไป 1 เดือน">เดือน »</button>
+        <button type="button" id="nowBtn" class="accent">ตอนนี้</button>
+      </div>
+      <div class="row">
+        <label class="time">เวลา <output id="timeOut"></output>
+          <input type="range" id="timeInput" min="0" max="1439" step="1" aria-label="เวลาในวัน">
+        </label>
+      </div>
+      <div class="row">
+        <button type="button" id="playBtn" class="accent">▶ เล่น</button>
+        <select id="speedSel" aria-label="ความเร็ว">
+          <option value="3600000">1 ชั่วโมง / วินาที</option>
+          <option value="86400000" selected>1 วัน / วินาที</option>
+          <option value="604800000">1 สัปดาห์ / วินาที</option>
+          <option value="2592000000">1 เดือน / วินาที</option>
+        </select>
+        <select id="placeSel" aria-label="สถานที่"></select>
+        <button type="button" id="nextEventBtn">ไปวันวิษุวัต/อายันถัดไป</button>
+      </div>
+    </section>
+
+    <section class="cards">
+      <article class="card">
+        <h2>ฤดูกาลรอบปี</h2>
+        <p class="big" id="seasonName"></p>
+        <p id="thaiSeason" class="muted"></p>
+        <p id="countdown"></p>
+        <svg id="yearWheel" viewBox="-135 -122 270 244" aria-label="ตำแหน่งของโลกในรอบปี"></svg>
+        <ul class="events" id="seasonList"></ul>
+      </article>
+
+      <article class="card">
+        <h2>รอบวัน</h2>
+        <p class="muted" id="placeName"></p>
+        <div class="daybar" id="dayBar"><div class="day" id="dayPart"></div><div class="now" id="nowMark"></div></div>
+        <div class="ticks"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
+        <dl class="grid" id="dayInfo"></dl>
+      </article>
+
+      <article class="card">
+        <h2>ดวงจันทร์</h2>
+        <p class="big" id="moonName"></p>
+        <p id="moonThai"></p>
+        <dl class="grid" id="moonInfo"></dl>
+        <svg id="phaseRing" viewBox="-155 -125 310 268" aria-label="วงรอบข้างขึ้นข้างแรม"></svg>
+        <ul class="events" id="moonList"></ul>
+      </article>
+    </section>
+
+    <p class="foot">เวลาทั้งหมดแสดงตามเขตเวลาของเครื่อง · คำนวณด้วยสูตรของ Jean Meeus (คลาดเคลื่อนไม่กี่นาที) · ภาพไม่ได้ย่อส่วนตามจริง</p>
+  </main>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
