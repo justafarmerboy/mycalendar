@@ -5,3 +5,5 @@
 - After every finished change: run `npm test`, commit, then push to both the working branch and `main`
   (the owner asked for every change to go straight to `main`).
 - UI text is Thai.
+- `watchface/` is a Zepp OS watch face (Amazfit T-Rex 3). `watchface/shared/astro.js` must stay identical to `js/astro.js` (a test checks it).
+  Build: `zeus build` inside `watchface/`; images come from `node watchface/tools/render-assets.cjs`.
