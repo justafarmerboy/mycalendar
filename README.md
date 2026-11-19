@@ -30,6 +30,8 @@ npm test    # ทดสอบการคำนวณเทียบกับเ
 
 หรือวางไฟล์ทั้งโฟลเดอร์บนเว็บโฮสต์แบบ static ใดก็ได้ (GitHub Pages ฯลฯ) เพราะเป็น HTML/JS ล้วน
 
+**Vercel:** Add New → Project → Import repo นี้ แล้วกด Deploy ได้เลย (`vercel.json` ตั้งไว้ให้เสิร์ฟไฟล์ static ไม่ต้อง build)
+
 ## การคำนวณ
 
 `js/astro.js` ใช้สูตรอย่างย่อจาก Jean Meeus, *Astronomical Algorithms* ตำแหน่งดวงอาทิตย์คลาด ~0.01° และดวงจันทร์ ~0.02°

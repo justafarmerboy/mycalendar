@@ -1,0 +1,5 @@
+# Vercel serves the static files only; server.js is the local/Railway server.
+server.js
+railway.json
+test/
+CLAUDE.md
