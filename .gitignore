@@ -1,2 +1,4 @@
 node_modules/
 watchface/dist/
+.gradle/
+wearos/build/
