@@ -147,6 +147,17 @@
     return c.toDataURL('image/png');
   };
 
+  // A line of Thai text as an image: the watch's own font drops tone marks stacked on upper vowels
+  window.renderText = (text, size, h, color) => {
+    const probe = canvas(1).getContext('2d');
+    probe.font = `700 ${size}px Sarabun, sans-serif`;
+    const w = Math.ceil(probe.measureText(text).width) + 4;
+    const c = canvas(w, h), ctx = c.getContext('2d');
+    ctx.font = probe.font; ctx.fillStyle = color; ctx.textBaseline = 'middle';
+    ctx.fillText(text, 2, h / 2 + 1);
+    return { url: c.toDataURL('image/png'), w };
+  };
+
   // Digits for the time, drawn in the page's display font
   window.renderGlyph = (ch, w, h, size, color) => {
     const c = canvas(w, h), ctx = c.getContext('2d');

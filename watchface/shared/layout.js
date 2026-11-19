@@ -8,4 +8,5 @@ export const LAYOUT = {
   timeY: 44, digitW: 46, digitH: 80, colonW: 20, digitSize: 78,
   dateY: 128,
   lineY: [342, 376, 410], lineH: 32,
+  textImgY: 336, textImgH: 44, // Moon line images: taller than a text line, room for stacked Thai marks
 };

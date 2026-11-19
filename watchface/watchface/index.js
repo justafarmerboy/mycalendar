@@ -2,6 +2,7 @@
 // on its orbit showing the phase we see. Updated every minute from the watch's clock.
 import { faceState, statsText, EARTH_FRAMES } from '../shared/sky.js';
 import { LAYOUT as L } from '../shared/layout.js';
+import { TEXT_W } from '../shared/text-images.js';
 
 const img = (name) => `images/${name}`;
 const pad2 = (n) => (n < 10 ? '0' : '') + n;
@@ -49,7 +50,9 @@ WatchFace({
       align_h: hmUI.align.CENTER_H, align_v: hmUI.align.CENTER_V, text_style: hmUI.text_style.ELLIPSIS, show_level: level,
     });
     const dateText = text(L.dateY, 28, 0xcfd6e4, hmUI.show_level.ONLY_NORMAL | hmUI.show_level.ONAL_AOD);
-    const moonText = text(L.lineY[0], 26, 0xe6ebf5);
+    // the Moon line is drawn from images: the watch font loses tone marks over upper vowels (ขึ้น, ค่ำ)
+    const lunarImg = hmUI.createWidget(hmUI.widget.IMG, { x: 0, y: L.textImgY, src: img('lunar/w01.png'), show_level: NORMAL });
+    const phaseImg = hmUI.createWidget(hmUI.widget.IMG, { x: 0, y: L.textImgY, src: img('phase/p0.png'), show_level: NORMAL });
     const seasonText = text(L.lineY[1], 26, 0xf5b942);
     const statsLine = text(L.lineY[2], 24, 0x8f9bb5);
 
@@ -66,7 +69,10 @@ WatchFace({
       shown.setProperty(hmUI.prop.VISIBLE, true);
       hidden.setProperty(hmUI.prop.VISIBLE, false);
       dateText.setProperty(hmUI.prop.MORE, { text: f.date });
-      moonText.setProperty(hmUI.prop.MORE, { text: f.moon });
+      const lunar = `lunar/${f.lunarKey}`, phase = `phase/p${f.phaseIndex}`, gap = 6;
+      const lx = Math.round(L.cx - (TEXT_W[lunar] + gap + TEXT_W[phase]) / 2);
+      lunarImg.setProperty(hmUI.prop.MORE, { x: lx, src: img(lunar + '.png') });
+      phaseImg.setProperty(hmUI.prop.MORE, { x: lx + TEXT_W[lunar] + gap, src: img(phase + '.png') });
       seasonText.setProperty(hmUI.prop.MORE, { text: f.season });
       statsLine.setProperty(hmUI.prop.MORE, { text: statsText(heart.last, step.current, battery.current) });
     };

@@ -1,13 +1,14 @@
 // Renders the watch face images (Earth, Moon, background, digits, preview) with headless Chromium.
-// Usage: node watchface/tools/render-assets.cjs [path/to/Sarabun-700.woff]
-// Output: watchface/assets/trex3/images/
+// Usage: node watchface/tools/render-assets.cjs
+// Output: watchface/assets/trex3/images/ and watchface/shared/text-images.js (widths of the text images)
+// Font: Sarabun Bold (SIL Open Font License, tools/fonts/OFL.txt)
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
 const OUT = path.join(ROOT, 'assets/trex3/images');
-const fontPath = process.argv[2];
+const FONTS = path.join(__dirname, 'fonts');
 
 const save = (rel, dataUrl) => {
   const file = path.join(OUT, rel);
@@ -23,9 +24,9 @@ const pad2 = (n) => String(n).padStart(2, '0');
 
   const browser = await chromium.launch();
   const page = await browser.newPage();
-  const fontCss = fontPath
-    ? `@font-face { font-family: Sarabun; font-weight: 700; src: url(data:font/woff;base64,${fs.readFileSync(fontPath).toString('base64')}); }`
-    : '';
+  // the full font (not a web subset), which keeps the rules that place Thai tone marks
+  const fontCss = `@font-face { font-family: Sarabun; font-weight: 700;
+    src: url(data:font/ttf;base64,${fs.readFileSync(path.join(FONTS, 'Sarabun_700Bold.ttf')).toString('base64')}); }`;
   await page.setContent(`<style>${fontCss} body { font-family: Sarabun; }</style><p style="font-weight:700">ปฏิทินฟ้า 0123456789</p>`);
   await page.evaluate(() => document.fonts.ready);
   await page.addScriptTag({ content: `window.LAYOUT = ${JSON.stringify(LAYOUT)};\n${land}` });
@@ -41,6 +42,27 @@ const pad2 = (n) => String(n).padStart(2, '0');
   for (let d = 0; d <= 9; d++) {
     save(`digits/${d}.png`, await page.evaluate(([ch, l]) => renderGlyph(ch, l.digitW, l.digitH, l.digitSize, '#e6ebf5'), [String(d), LAYOUT]));
   }
+  // the Moon line (lunar day + phase name) as images, with their widths for centring on the watch
+  const widths = {};
+  // drawn as HTML and captured: Chromium's canvas text loses Thai tone marks stacked on upper vowels
+  const H = LAYOUT.textImgH;
+  const tp = await browser.newPage();
+  await tp.setContent(`<style>${fontCss} body { margin: 0; background: transparent; }
+    span { display: inline-block; font: 700 26px Sarabun; color: #e6ebf5; line-height: ${H}px; height: ${H}px; padding: 0 2px; white-space: nowrap; }</style><span id="t"></span>`);
+  await tp.evaluate(() => document.fonts.ready);
+  const text = async (rel, s) => {
+    await tp.evaluate((s) => { document.getElementById('t').textContent = s; }, s);
+    const el = await tp.$('#t');
+    const file = path.join(OUT, rel + '.png');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    await el.screenshot({ path: file, omitBackground: true });
+    widths[rel] = Math.round((await el.boundingBox()).width);
+  };
+  for (const key of sky.LUNAR_KEYS) await text(`lunar/${key}`, sky.lunarText(key));
+  for (const [i, name] of sky.PHASE_NAMES.entries()) await text(`phase/p${i}`, '· ' + name);
+  fs.writeFileSync(path.join(ROOT, 'shared/text-images.js'),
+    '// Widths in px of the text images in assets/trex3/images, written by tools/render-assets.cjs\n'
+    + `export const TEXT_W = ${JSON.stringify(widths, null, 2)};\n`);
   save('digits/colon.png', await page.evaluate((l) => renderGlyph(':', l.colonW, l.digitH, l.digitSize, '#f5b942'), LAYOUT));
 
   // Preview: the face as it looks now in Bangkok, composed from the images above
@@ -66,7 +88,9 @@ const pad2 = (n) => String(n).padStart(2, '0');
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     const line = (s, y, size, color) => { ctx.font = `700 ${size}px Sarabun, sans-serif`; ctx.fillStyle = color; ctx.fillText(s, 240, y + (l.lineH + 4) / 2); };
     line(f.date, l.dateY, 28, '#cfd6e4');
-    line(f.moon, l.lineY[0], 26, '#e6ebf5');
+    const lunar = await get(`lunar/${f.lunarKey}.png`), phase = await get(`phase/p${f.phaseIndex}.png`);
+    const lx = 240 - (lunar.width + 6 + phase.width) / 2;
+    ctx.drawImage(lunar, lx, l.textImgY); ctx.drawImage(phase, lx + lunar.width + 6, l.textImgY);
     line(f.season, l.lineY[1], 26, '#f5b942');
     line(stats, l.lineY[2], 24, '#8f9bb5');
     return c.toDataURL('image/png');

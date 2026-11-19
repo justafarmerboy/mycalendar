@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { faceState, statsText } from '../watchface/shared/sky.js';
+import { TEXT_W } from '../watchface/shared/text-images.js';
 
 const BKK = 7 * 3600000;
 const at = (iso) => new Date(iso).getTime();
@@ -22,7 +23,7 @@ test('face on the full moon of ออกพรรษา, 26 Oct 2026, Bangkok', 
 
 test('face on the December solstice (22 Dec, Bangkok time) shows the time of the event', () => {
   const f = faceState(at('2026-12-22T00:00Z'), BKK);
-  assert.match(f.season, /^วันนี้เหมายัน 03:[45]\d น\.$/);
+  assert.match(f.season, /^เหมายัน เวลา 03:[45]\d น\.$/);
   assert.equal(f.earthFrame, 27); // Sun at 270 degrees: north pole tilted away from the Sun
 });
 
@@ -69,7 +70,15 @@ test('watch face builds and fills its widgets', async () => {
   face.build();
 
   const texts = widgets.filter((w) => w.type === 'TEXT').map((w) => w.opts.text);
-  assert.deepEqual(texts, ['พฤ. 19 พ.ย. 2569', 'ขึ้น 10 ค่ำ · ข้างขึ้น ค่อนดวง', 'อีก 33 วัน ถึงเหมายัน', 'HR 72   5,230 ก้าว   80%']);
+  assert.deepEqual(texts, ['พฤ. 19 พ.ย. 2569', 'อีก 33 วัน ถึงเหมายัน', 'HR 72   5,230 ก้าว   80%']);
+  // the Moon line comes from images, centred on the screen
+  const [lunar, phase] = widgets.filter((w) => /\/(lunar|phase)\//.test(w.opts.src));
+  assert.equal(lunar.opts.src, 'images/lunar/w10.png');
+  assert.equal(phase.opts.src, 'images/phase/p3.png');
+  const right = phase.opts.x + TEXT_W['phase/p3'];
+  assert.ok(Math.abs(lunar.opts.x + right - 480) <= 1, `${lunar.opts.x} .. ${right}`);
+  // no text the watch font cannot draw: a tone mark right after an upper vowel or sara am
+  for (const t of texts) assert.doesNotMatch(t, /[\u0e31\u0e34-\u0e37][\u0e48-\u0e4b]|[\u0e48-\u0e4b]\u0e33/, t);
   const earth = widgets[2];
   assert.match(earth.opts.src, /^images\/earth\/e\d\d\.png$/);
   assert.ok(fs.existsSync(new URL(`../watchface/assets/trex3/${earth.opts.src}`, import.meta.url)));

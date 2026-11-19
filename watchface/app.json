@@ -4,7 +4,7 @@
     "appId": 1000001,
     "appName": "SkyCalendar",
     "appType": "watchface",
-    "version": { "code": 1, "name": "1.0.0" },
+    "version": { "code": 2, "name": "1.0.1" },
     "icon": "images/preview.png",
     "vender": "justafarmerboy",
     "description": "ปฏิทินฟ้า: โลก ดวงอาทิตย์ ดวงจันทร์ วิษุวัต อายัน ข้างขึ้นข้างแรม"
