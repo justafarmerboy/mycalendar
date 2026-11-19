@@ -1,0 +1,25 @@
+// Wear OS watch face in Watch Face Format: resources only, no code.
+// res/raw/watchface.xml and the images come from tools/gen-watchface.mjs.
+plugins {
+    id 'com.android.application' version '8.5.2'
+}
+
+android {
+    namespace 'com.justafarmerboy.skycalendar.watchface'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.justafarmerboy.skycalendar.watchface'
+        minSdk 33 // Wear OS 4, the first with Watch Face Format
+        targetSdk 34
+        versionCode 1
+        versionName '1.0.0'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.debug // replace with your upload key before publishing
+        }
+    }
+}
