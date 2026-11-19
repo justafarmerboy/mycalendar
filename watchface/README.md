@@ -33,6 +33,13 @@ zeus preview    # เลือก target แล้วจะได้ QR code
 เปิดแอป Zepp → โปรไฟล์ → การตั้งค่า → โหมดนักพัฒนา → Scan แล้วสแกน QR code
 หน้าปัดจะติดตั้งลงนาฬิกาและตั้งเป็นหน้าปัดปัจจุบัน
 
+### ติดตั้งจากมือถือโดยไม่ใช้คอม (ทดลอง)
+
+ไฟล์หน้าปัดที่ build แล้วอยู่บนเว็บที่ `/install/skycalendar-trex3.zip` และ QR code อยู่ที่ `/install/qr-trex3.png`
+เปิดรูป QR บนจออื่น แล้วสแกนด้วยแอป Zepp → โหมดนักพัฒนา → Scan
+QR นี้ใช้รูปแบบเดียวกับ `zeus preview --local` (`zpkd1://โฮสต์:พอร์ต/ไฟล์.zip`) แต่ชี้ไปที่เว็บ Railway
+เมื่อแก้หน้าปัด ให้ `zeus build` แล้วคัดลอกไฟล์ `.zpk` ใน `dist/*.zab` ไปทับ `install/skycalendar-trex3.zip`
+
 ถ้า `zeus preview` แจ้งเรื่อง appId ให้สร้างโปรเจกต์หน้าปัดใหม่ใน https://console.zepp.com
 แล้วเอา appId ที่ได้มาใส่ใน `app.json` (ช่อง `app.appId`)
 
