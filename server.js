@@ -10,7 +10,7 @@ const PORT = Number(process.env.PORT) || 3000;
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.zip': 'application/zip' };
 
 http.createServer((req, res) => {
-  if (req.url.startsWith('/install/')) console.log(req.method, req.url, req.headers['user-agent'] || '', req.headers.range || '');
+  if (!/\.(png|js|css)$/.test(req.url) || req.url.startsWith('/install/')) console.log(req.method, req.url, req.headers['user-agent'] || '', req.headers.range || '');
   const pathname = decodeURIComponent(new URL(req.url, 'http://x').pathname);
   const file = path.resolve(ROOT, '.' + (pathname === '/' ? '/index.html' : pathname));
   if (!file.startsWith(ROOT + path.sep) || /[\\/](\.git|node_modules|test)[\\/]/.test(file)) { res.writeHead(403).end(); return; }
